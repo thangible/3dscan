@@ -1,0 +1,15 @@
+[project]
+name = "code"
+version = "0.1.0"
+description = "Venv for embedding and clustering"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "torch>=2.8.0",
+    "torchvision>=0.23.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.30.1",
+]

@@ -1,0 +1,89 @@
+
+from GPUtil import getGPUs, GPU
+from typing import List
+import os
+import random
+import numpy as np
+from packaging.version import Version as V
+import torch
+
+def get_idle_gpu(gpu_num: int = 1, id_only: bool = True) -> List[GPU]:
+    """
+
+    find idle GPUs for distributed learning.
+
+    """
+    sorted_gpus = sorted(getGPUs(), key=lambda g: g.memoryUtil)
+    if len(sorted_gpus) < gpu_num:
+        raise RuntimeError(
+            f"Your machine doesn't have enough GPUs ({len(sorted_gpus)}) as you specified ({gpu_num})!")
+    sorted_gpus = sorted_gpus[:gpu_num]
+
+    if id_only:
+        return [gpu.id for gpu in sorted_gpus]
+    else:
+        return sorted_gpus
+
+
+
+def batch_to_cuda(batch, device):
+    for key in batch.keys():
+        if key == 'input':
+            # input is already a single tensor (B, C, H, W)
+            # batch[key] = torch.from_numpy(batch[key])
+            batch[key] = batch[key].to(device=device, dtype=torch.float32)
+        
+        elif key in ["gt_masks", "ar_object_masks", "tc_object_masks"]:
+            batch[key] = [
+                torch.from_numpy(item).to(device=device, dtype=torch.float32)
+                if isinstance(item, np.ndarray)
+                else item.to(device=device, dtype=torch.float32) if item is not None else None
+                for item in batch[key]
+            ]
+        elif key in ["ar_bbox_prompts", "tc_bbox_prompts", "ar_mask_prompts", "tc_mask_prompts"]:
+            batch[key] = [
+                item.to(device=device, dtype=torch.float32) if item is not None else None
+                for item in batch[key]
+            ]
+        elif key in ["ar_point_prompts", "tc_point_prompts"]:
+            # points, labels = zip(*batch[key])
+            batch[key] = [
+                (item[0].to(device=device, dtype=torch.float32),
+                 item[1].to(device=device, dtype=torch.float32))
+                if item[0] is not None
+                else None
+                for item in batch[key]
+            ]
+    return batch
+
+
+def get_idle_port() -> str:
+    """
+    find an idle port to used for distributed learning
+
+    """
+    pscmd = "netstat -ntl |grep -v Active| grep -v Proto|awk '{print $4}'|awk -F: '{print $NF}'"
+    procs = os.popen(pscmd).read()
+    procarr = procs.split("\n")
+    tt = str(random.randint(15000, 30000))
+    if tt not in procarr:
+        return tt
+    else:
+        return get_idle_port()
+
+
+def set_randomness():
+    random.seed(3407)
+    np.random.seed(3407)
+    torch.manual_seed(3407)
+    torch.cuda.manual_seed(3407)
+    os.environ['PYTHONHASHSEED'] = str(3407)
+
+    # For more details about 'CUBLAS_WORKSPACE_CONFIG',
+    # please refer to https://docs.nvidia.com/cuda/cublas/index.html#cublasApi_reproducibility
+    if V(torch.version.cuda) >= V("10.2"):
+        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    torch.use_deterministic_algorithms(mode=True, warn_only=True)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.set_float32_matmul_precision('medium')
