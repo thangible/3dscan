@@ -3,13 +3,13 @@ from torch.utils.data import DataLoader
 import torch
 import torch.nn.functional as F
 from torchvision import transforms
-from model.model import VAE
-import random
+
 import numpy as np
-import os
-from train_parser import parse
+from training.train_parser import parse
 from training.loss import vae_loss
-from train_util import set_randomness
+from training.train_util import set_randomness
+
+from model.vanilla_vae import VanillaVAE
 
 
 def setup_optimizer_and_scheduler(model, args):
@@ -32,45 +32,53 @@ def setup_optimizer_and_scheduler(model, args):
     return optimizer, scheduler
 
 
-def train_one_epoch(model, dataloader, optimizer, device, epoch, num_epochs):
-    model.train()
-    total_loss = 0
+def train_vae(model, dataloader, optimizer, device, num_epochs=20):
+    # Initialize static variable for best loss
+    if not hasattr(train_vae, 'best_loss'):
+        train_vae.best_loss = float('inf')
     
-    for batch_idx, (inputs, _) in enumerate(dataloader):
-        inputs = inputs.to(device)
-        inputs = inputs.view(inputs.size(0), -1)  # Flatten for VAE
+    model.train()
+    for epoch in range(num_epochs):
+        total_loss = 0
+        for data in dataloader:
+            inputs, _ = data
+            inputs = inputs.to(device)  # Move inputs to the correct device
+            optimizer.zero_grad()
+            reconstructed_x, mu, log_var = model(inputs)
+            loss = vae_loss(reconstructed_x, inputs, mu, log_var)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss/len(dataloader)}")
         
-        optimizer.zero_grad()
-        reconstructed_x, mu, log_var = model(inputs)
-        loss = vae_loss(reconstructed_x, inputs, mu, log_var)
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.item()
-        
-    avg_loss = total_loss / len(dataloader)
-    print(f"Epoch [{epoch}/{num_epochs}], Loss: {avg_loss:.4f}")
-    return avg_loss
+        avg_loss = total_loss / len(dataloader)
+        # Log loss to file
+        with open("training_log.txt", "a") as log_file:
+            log_file.write(f"Epoch {epoch+1},{avg_loss}\n")
 
+        # Save best model weights
+        if epoch == 0 or avg_loss < train_vae.best_loss:
+            train_vae.best_loss = avg_loss
+            torch.save(model.state_dict(), "best_vae_weights.pth")
 
 def main():
     set_randomness()
     args = parse()
+
+    
     
     # Setup device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-    
-    # Dataset
-    data_dir = args.data_dir
-    
+      
     # Add transforms to resize images to consistent size
     transform = transforms.Compose([
-        transforms.Resize((256, 256)),
+        transforms.Resize((args.input_dim, args.input_dim)),
         transforms.ToTensor(),
     ])
     
-    train_dataset = ImageDataset(data_dir, train_flag=True, transforms=transform)
-    val_dataset = ImageDataset(data_dir, train_flag=False, transforms=transform)
+    train_dataset = ImageDataset(args.data_dir, train_flag=True, transforms=transform)
+    val_dataset = ImageDataset(args.data_dir, train_flag=False, transforms=transform)
     
     # Dataloaders
     train_dataloader = DataLoader(
@@ -86,19 +94,17 @@ def main():
         num_workers=0
     )
     
-    # Model
-    input_dim = 256 * 256 * 3  # Match the resized image dimensions
-    hidden_dim = 512
-    latent_dim = 128
-    model = VAE(input_dim, hidden_dim, latent_dim).to(device)
-    
+
+    model = VanillaVAE(args.input_dim, args.hidden_dim, args.latent_dim).to(device)
+
     # Optimizer and scheduler
     optimizer, scheduler = setup_optimizer_and_scheduler(model, args)
     
     # Training loop
-    for epoch in range(1, args.max_epoch_num + 1):
-        train_loss = train_one_epoch(model, train_dataloader, optimizer, device, epoch, args.max_epoch_num)
-        scheduler.step()
+    train_vae(model, train_dataloader, optimizer, device, num_epochs=args.max_epoch_num)
+
+        
+        
 
 
 if __name__ == '__main__':

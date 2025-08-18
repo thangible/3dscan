@@ -1,9 +1,9 @@
 import torch.nn as nn
 import torch
 
-class VAE(nn.Module):
+class VanillaVAE(nn.Module):
     def __init__(self, input_dim, hidden_dim, latent_dim):
-        super(VAE, self).__init__()
+        super(VanillaVAE, self).__init__()
         # Encoder
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),

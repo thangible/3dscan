@@ -1,0 +1,8 @@
+data_dir: ../data/normalized_images
+input_dim: 256
+hidden_dim: 512
+latent_dim: 128
+batch_size: 32
+max_epoch_num: 1
+lr: 1e-3
+weight_decay: 1e-4
