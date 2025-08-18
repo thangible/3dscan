@@ -34,7 +34,7 @@ def setup_optimizer_and_scheduler(model, args):
     return optimizer, scheduler
 
 
-def train_vae(model, dataloader, optimizer, device, num_epochs=20):
+def train_vae(model, dataloader, optimizer, device, checkpoint, num_epochs=20):
     # Initialize static variable for best loss
     if not hasattr(train_vae, 'best_loss'):
         train_vae.best_loss = float('inf')
@@ -55,13 +55,13 @@ def train_vae(model, dataloader, optimizer, device, num_epochs=20):
         
         avg_loss = total_loss / len(dataloader)
         # Log loss to file
-        with open("training_log.txt", "a") as log_file:
+        with open("exp/training_log.txt", "a") as log_file:
             log_file.write(f"Epoch {epoch+1},{avg_loss}\n")
 
         # Save best model weights
         if epoch == 0 or avg_loss < train_vae.best_loss:
             train_vae.best_loss = avg_loss
-            torch.save(model.state_dict(), "best_vae_weights.pth")
+            torch.save(model.state_dict(), checkpoint)
 
 def main():
     set_randomness()
@@ -95,15 +95,16 @@ def main():
         shuffle=False,
         num_workers=0
     )
-    
 
+    
     model = VanillaVAE(args.input_dim, args.hidden_dim, args.latent_dim).to(device)
 
     # Optimizer and scheduler
     optimizer, scheduler = setup_optimizer_and_scheduler(model, args)
     
     # Training loop
-    train_vae(model, train_dataloader, optimizer, device, num_epochs=args.max_epoch_num)
+    checkpoint = os.path.join(args.exp, "best_vae_weights.pth")
+    train_vae(model, train_dataloader, optimizer, device, checkpoint, num_epochs=args.max_epoch_num)
 
         
         

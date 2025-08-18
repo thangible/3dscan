@@ -4,9 +4,10 @@ __pycache__
 *$py.class
 .vscode/
 .vscode
+exp
 # C extensions
 *.so
-
+script/datasets
 # Distribution / packaging
 .Python
 build/

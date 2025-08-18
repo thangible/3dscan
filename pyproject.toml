@@ -5,8 +5,17 @@ description = "Venv for embedding and clustering"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "argparse>=1.4.0",
+    "configargparse>=1.7.1",
+    "matplotlib>=3.10.5",
+    "numpy>=2.3.2",
+    "pandas>=2.3.1",
+    "pillow>=11.3.0",
+    "pyyaml>=6.0.2",
+    "scikit-learn>=1.7.1",
     "torch>=2.8.0",
-    "torchvision>=0.23.0"
+    "torchvision>=0.23.0",
+    "tqdm>=4.67.1",
 ]
 
 [[tool.uv.index]]

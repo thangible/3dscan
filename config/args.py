@@ -3,7 +3,7 @@ import configargparse
 
 def parse():
     parser = configargparse.ArgumentParser()
-    parser.add_argument('--config', is_config_file=True, help='Path to the config file', default = 'config.yaml')
+    parser.add_argument('--config', is_config_file=True, help='Path to the config file', default = 'config/config.yaml')
     
     parser.add_argument('--data_dir', type=str, help='Directory containing the dataset', default='../data/normalized_images/normalized_images')
     
@@ -20,5 +20,7 @@ def parse():
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate for the optimizer')
     
     parser.add_argument('--weight_decay', type=float, default=1e-5, help='Weight decay for the optimizer')
+    
+    parser.add_argument('--exp', type=str, default='exp', help='Experiment directory to save outputs')
 
     return parser.parse_args()
