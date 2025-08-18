@@ -5,6 +5,7 @@ __pycache__
 .vscode/
 .vscode
 exp
+vscode/settings.json
 # C extensions
 *.so
 script/datasets
