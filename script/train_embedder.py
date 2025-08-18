@@ -1,15 +1,17 @@
-from dataset.dataset import ImageDataset
+import sys
+import os
+# Add the parent directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from dataset import ImageDataset
 from torch.utils.data import DataLoader
 import torch
 import torch.nn.functional as F
 from torchvision import transforms
 
 import numpy as np
-from training.train_parser import parse
-from training.loss import vae_loss
-from training.train_util import set_randomness
-
-from model.vanilla_vae import VanillaVAE
+from training import parse, vae_loss, set_randomness
+from model import VanillaVAE
 
 
 def setup_optimizer_and_scheduler(model, args):
