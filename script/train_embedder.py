@@ -44,6 +44,7 @@ def log_reconstruction_images(model, dataloader, device, epoch, num_images=8):
     Log input and reconstructed images to wandb for visualization
     """
     model.eval()
+    print(f"Logging reconstruction images for epoch {epoch}...")
     
     with torch.no_grad():
         # Get a batch of images
