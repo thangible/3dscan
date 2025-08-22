@@ -13,6 +13,7 @@ import numpy as np
 from training import  vae_loss, set_randomness
 from model import VQVAE
 from config.args import parse
+import wandb
 
 
 def setup_optimizer_and_scheduler(model, args):
@@ -35,7 +36,7 @@ def setup_optimizer_and_scheduler(model, args):
     return optimizer, scheduler
 
 
-def train_vae(model, dataloader, optimizer, device, checkpoint, num_epochs=20):
+def train_vae(model, dataloader, optimizer, scheduler, device, checkpoint, args, num_epochs=20):
     """
     Train VAE model with support for both VanillaVAE and VQVAE
     """
@@ -79,6 +80,20 @@ def train_vae(model, dataloader, optimizer, device, checkpoint, num_epochs=20):
                 total_kld_loss += loss_dict['KLD'].item()
             elif 'VQ_Loss' in loss_dict:
                 total_kld_loss += loss_dict['VQ_Loss'].item()
+            
+            # Log batch-level metrics to wandb (every 100 batches)
+            if batch_idx % 100 == 0:
+                wandb.log({
+                    "batch/loss": total_loss_batch.item(),
+                    "batch/reconstruction_loss": loss_dict.get('Reconstruction_Loss', 0).item() if 'Reconstruction_Loss' in loss_dict else 0,
+                    "batch/kld_or_vq_loss": loss_dict.get('KLD', loss_dict.get('VQ_Loss', 0)).item(),
+                    "batch/learning_rate": optimizer.param_groups[0]['lr'],
+                    "batch/epoch": epoch,
+                    "batch/batch_idx": batch_idx
+                })
+        
+        # Step scheduler
+        scheduler.step()
         
         # Calculate average losses
         avg_loss = total_loss / len(dataloader)
@@ -94,6 +109,16 @@ def train_vae(model, dataloader, optimizer, device, checkpoint, num_epochs=20):
         else:
             print(f"  VQ Loss: {avg_kld_loss:.6f}")
         
+        # Log epoch-level metrics to wandb
+        wandb.log({
+            "epoch/loss": avg_loss,
+            "epoch/reconstruction_loss": avg_recons_loss,
+            "epoch/kld_or_vq_loss": avg_kld_loss,
+            "epoch/learning_rate": optimizer.param_groups[0]['lr'],
+            "epoch/epoch": epoch + 1,
+            "epoch/best_loss": train_vae.best_loss
+        })
+        
         # Log loss to file
         with open("exp/training_log.txt", "a") as log_file:
             log_file.write(f"Epoch {epoch+1},{avg_loss},{avg_recons_loss},{avg_kld_loss}\n")
@@ -101,20 +126,73 @@ def train_vae(model, dataloader, optimizer, device, checkpoint, num_epochs=20):
         # Save best model weights
         if epoch == 0 or avg_loss < train_vae.best_loss:
             train_vae.best_loss = avg_loss
-            torch.save(model.state_dict(), checkpoint)
+            
+            # Save checkpoint with metadata
+            checkpoint_data = {
+                'epoch': epoch + 1,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'best_loss': avg_loss,
+                'config': {
+                    'input_dim': args.input_dim,
+                    'hidden_dim': args.hidden_dim,
+                    'latent_dim': args.latent_dim,
+                    'batch_size': args.batch_size,
+                    'lr': args.lr
+                }
+            }
+            torch.save(checkpoint_data, checkpoint)
+            
+            # Log model artifact to wandb
+            artifact = wandb.Artifact(f"model-epoch-{epoch+1}", type="model")
+            artifact.add_file(checkpoint)
+            wandb.log_artifact(artifact)
+            
             print(f"  New best model saved! Loss: {avg_loss:.6f}")
+            
+            # Log best loss update
+            wandb.log({
+                "epoch/new_best_loss": avg_loss,
+                "epoch/best_epoch": epoch + 1
+            })
         
         print("-" * 50)
 
 def main():
     set_randomness()
     args = parse()
-
     
+    # Initialize wandb
+    wandb.init(
+        project="3d-scanner-vqvae",  # Change to your project name
+        name=f"vqvae-{args.exp}",
+        config={
+            "input_dim": args.input_dim,
+            "hidden_dim": args.hidden_dim,
+            "latent_dim": args.latent_dim,
+            "batch_size": args.batch_size,
+            "max_epochs": args.max_epoch_num,
+            "learning_rate": args.lr,
+            "weight_decay": args.weight_decay,
+            "experiment": args.exp,
+            "data_dir": args.data_dir,
+            "model_type": "VQVAE"
+        },
+        tags=["vqvae", "3d-scanner", "clustering"]
+    )
     
     # Setup device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
+    
+    # Log device info
+    wandb.log({"system/device": str(device)})
+    if torch.cuda.is_available():
+        wandb.log({
+            "system/gpu_name": torch.cuda.get_device_name(0),
+            "system/gpu_memory": torch.cuda.get_device_properties(0).total_memory / 1e9
+        })
     
     transform = transforms.Compose([
         transforms.Grayscale(num_output_channels=1),  # Convert to grayscale
@@ -134,18 +212,58 @@ def main():
         num_workers=0  # Set to 0 for Windows compatibility
     )
 
+    # Log dataset info
+    wandb.log({
+        "dataset/size": len(train_dataset),
+        "dataset/num_batches": len(train_dataloader)
+    })
 
     model = VQVAE(in_channels=1, 
                   out=1,
-                  hidden_dim=args.hidden_dim, 
-                  latent_dim=args.latent_dim).to(device)
+                  embedding_dim=args.hidden_dim, 
+                  num_embeddings=args.latent_dim,
+                  img_size=512).to(device)
+
+    # Log model info
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    wandb.log({
+        "model/total_parameters": total_params,
+        "model/trainable_parameters": trainable_params
+    })
 
     # Optimizer and scheduler
     optimizer, scheduler = setup_optimizer_and_scheduler(model, args)
     
     # Training loop
-    checkpoint = os.path.join(args.exp, "best_vae_weights.pth")
-    train_vae(model, train_dataloader, optimizer, device, checkpoint, num_epochs=args.max_epoch_num)
+    checkpoint_path = os.path.join(args.exp, "best_vqvae_model.pth")
+    
+    # Check if resuming from checkpoint
+    start_epoch = 0
+    if os.path.exists(checkpoint_path):
+        print(f"Resuming from checkpoint: {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+            model.load_state_dict(checkpoint["model_state_dict"])
+            if 'optimizer_state_dict' in checkpoint:
+                optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            if 'scheduler_state_dict' in checkpoint:
+                scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+            start_epoch = checkpoint.get('epoch', 0)
+            train_vae.best_loss = checkpoint.get('best_loss', float('inf'))
+            
+            wandb.log({
+                "resume/checkpoint_epoch": start_epoch,
+                "resume/checkpoint_loss": checkpoint.get('best_loss', float('inf'))
+            })
+    
+    # Watch model for gradients (optional - can be memory intensive)
+    # wandb.watch(model, log="all", log_freq=100)
+    
+    train_vae(model, train_dataloader, optimizer, scheduler, device, checkpoint_path, args, num_epochs=args.max_epoch_num)
+    
+    # Finish wandb run
+    wandb.finish()
 
 if __name__ == '__main__':
     main()
