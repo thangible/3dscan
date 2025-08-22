@@ -15,6 +15,8 @@ from model import VQVAE
 from config.args import parse
 import wandb
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+import torchvision.utils as vutils
 
 
 def setup_optimizer_and_scheduler(model, args):
@@ -35,6 +37,72 @@ def setup_optimizer_and_scheduler(model, args):
     )
     
     return optimizer, scheduler
+
+
+def log_reconstruction_images(model, dataloader, device, epoch, num_images=8):
+    """
+    Log input and reconstructed images to wandb for visualization
+    """
+    model.eval()
+    
+    with torch.no_grad():
+        # Get a batch of images
+        data_iter = iter(dataloader)
+        inputs, _ = next(data_iter)
+        inputs = inputs[:num_images].to(device)
+        
+        # Get reconstructions
+        outputs = model(inputs)
+        reconstructions = outputs[0] # First output is usually the reconstruction
+        
+        # Convert tensors to numpy and denormalize
+        inputs_np = inputs.cpu()
+        reconstructions_np = reconstructions.cpu()
+        
+        # Denormalize from [-1, 1] to [0, 1]
+        inputs_np = (inputs_np + 1) / 2
+        reconstructions_np = (reconstructions_np + 1) / 2
+        
+        # Clamp values to [0, 1]
+        inputs_np = torch.clamp(inputs_np, 0, 1)
+        reconstructions_np = torch.clamp(reconstructions_np, 0, 1)
+        
+        # Create side-by-side comparison
+        comparison_images = []
+        
+        for i in range(num_images):
+            # Get single images
+            input_img = inputs_np[i]
+            recon_img = reconstructions_np[i]
+            
+            # Create side-by-side image
+            if input_img.shape[0] == 1:  # Grayscale
+                input_img = input_img.squeeze(0)
+                recon_img = recon_img.squeeze(0)
+                
+                # Create side-by-side comparison
+                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4))
+                ax1.imshow(input_img, cmap='gray')
+                ax1.set_title('Input')
+                ax1.axis('off')
+                
+                ax2.imshow(recon_img, cmap='gray')
+                ax2.set_title('Reconstructed')
+                ax2.axis('off')
+                
+                plt.tight_layout()
+                
+                # Convert plot to wandb image
+                comparison_images.append(wandb.Image(plt, caption=f"Sample {i+1}"))
+                plt.close()
+        
+        # Log images to wandb
+        wandb.log({
+            f"reconstructions/epoch_{epoch}": comparison_images,
+            "reconstructions/epoch": epoch
+        })
+    
+    model.train()
 
 
 def train_vae(model, dataloader, optimizer, scheduler, device, checkpoint, args, num_epochs=20):
@@ -126,6 +194,11 @@ def train_vae(model, dataloader, optimizer, scheduler, device, checkpoint, args,
             'VQ/KLD': f'{avg_kld_loss:.4f}',
             'BestLoss': f'{train_vae.best_loss:.4f}'
         })
+        
+        # Log reconstruction images every 5 epochs
+        if (epoch + 1) % 5 == 0:
+            print(f"\nLogging reconstruction images for epoch {epoch + 1}...")
+            log_reconstruction_images(model, dataloader, device, epoch + 1)
         
         # Log epoch-level metrics to wandb
         wandb.log({
