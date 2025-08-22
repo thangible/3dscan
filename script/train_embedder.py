@@ -196,7 +196,7 @@ def train_vae(model, dataloader, optimizer, scheduler, device, checkpoint, args,
         })
         
         # Log reconstruction images every 5 epochs
-        if (epoch + 1) % 5 == 0:
+        if (epoch-1) % 5 == 0:
             print(f"\nLogging reconstruction images for epoch {epoch + 1}...")
             log_reconstruction_images(model, dataloader, device, epoch + 1)
         
