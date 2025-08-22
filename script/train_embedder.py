@@ -14,6 +14,7 @@ from training import  vae_loss, set_randomness
 from model import VQVAE
 from config.args import parse
 import wandb
+from tqdm import tqdm
 
 
 def setup_optimizer_and_scheduler(model, args):
@@ -48,12 +49,19 @@ def train_vae(model, dataloader, optimizer, scheduler, device, checkpoint, args,
     os.makedirs("exp", exist_ok=True)
     
     model.train()
-    for epoch in range(num_epochs):
+    
+    # Main epoch progress bar
+    epoch_pbar = tqdm(range(num_epochs), desc="Training", unit="epoch")
+    
+    for epoch in epoch_pbar:
         total_loss = 0
         total_recons_loss = 0
         total_kld_loss = 0
         
-        for batch_idx, data in enumerate(dataloader):
+        # Batch progress bar
+        batch_pbar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{num_epochs}", unit="batch", leave=False)
+        
+        for batch_idx, data in enumerate(batch_pbar):
             inputs, _ = data
             inputs = inputs.to(device)
             
@@ -81,6 +89,14 @@ def train_vae(model, dataloader, optimizer, scheduler, device, checkpoint, args,
             elif 'VQ_Loss' in loss_dict:
                 total_kld_loss += loss_dict['VQ_Loss'].item()
             
+            # Update batch progress bar with current loss
+            batch_pbar.set_postfix({
+                'Loss': f'{total_loss_batch.item():.4f}',
+                'ReconLoss': f'{loss_dict.get("Reconstruction_Loss", 0).item():.4f}',
+                'VQ/KLD': f'{loss_dict.get("KLD", loss_dict.get("VQ_Loss", 0)).item():.4f}',
+                'LR': f'{optimizer.param_groups[0]["lr"]:.2e}'
+            })
+            
             # Log batch-level metrics to wandb (every 100 batches)
             if batch_idx % 100 == 0:
                 wandb.log({
@@ -92,6 +108,9 @@ def train_vae(model, dataloader, optimizer, scheduler, device, checkpoint, args,
                     "batch/batch_idx": batch_idx
                 })
         
+        # Close batch progress bar
+        batch_pbar.close()
+        
         # Step scheduler
         scheduler.step()
         
@@ -100,14 +119,13 @@ def train_vae(model, dataloader, optimizer, scheduler, device, checkpoint, args,
         avg_recons_loss = total_recons_loss / len(dataloader)
         avg_kld_loss = total_kld_loss / len(dataloader)
         
-        # Print progress
-        print(f"Epoch {epoch+1}/{num_epochs}")
-        print(f"  Total Loss: {avg_loss:.6f}")
-        print(f"  Recons Loss: {avg_recons_loss:.6f}")
-        if 'KLD' in model.loss_function(*model(inputs.to(device))):
-            print(f"  KLD Loss: {avg_kld_loss:.6f}")
-        else:
-            print(f"  VQ Loss: {avg_kld_loss:.6f}")
+        # Update epoch progress bar
+        epoch_pbar.set_postfix({
+            'AvgLoss': f'{avg_loss:.4f}',
+            'ReconLoss': f'{avg_recons_loss:.4f}',
+            'VQ/KLD': f'{avg_kld_loss:.4f}',
+            'BestLoss': f'{train_vae.best_loss:.4f}'
+        })
         
         # Log epoch-level metrics to wandb
         wandb.log({
@@ -144,20 +162,24 @@ def train_vae(model, dataloader, optimizer, scheduler, device, checkpoint, args,
             }
             torch.save(checkpoint_data, checkpoint)
             
-            # Log model artifact to wandb
-            artifact = wandb.Artifact(f"model-epoch-{epoch+1}", type="model")
-            artifact.add_file(checkpoint)
-            wandb.log_artifact(artifact)
+            # # Log model artifact to wandb
+            # artifact = wandb.Artifact(f"model-epoch-{epoch+1}", type="model")
+            # artifact.add_file(checkpoint)
+            # wandb.log_artifact(artifact)
             
-            print(f"  New best model saved! Loss: {avg_loss:.6f}")
+            # Update progress bar with best model info
+            tqdm.write(f"✓ New best model saved! Loss: {avg_loss:.6f}")
             
             # Log best loss update
             wandb.log({
                 "epoch/new_best_loss": avg_loss,
                 "epoch/best_epoch": epoch + 1
             })
-        
-        print("-" * 50)
+    
+    # Close epoch progress bar
+    epoch_pbar.close()
+    print("Training completed!")
+
 
 def main():
     set_randomness()
@@ -202,6 +224,7 @@ def main():
         transforms.Normalize([0.5], [0.5]),  
     ])
     
+    print("Loading dataset...")
     train_dataset = ImageDataset(args.data_dir, train_flag=True, transforms=transform)
 
     # Dataloaders
@@ -217,7 +240,10 @@ def main():
         "dataset/size": len(train_dataset),
         "dataset/num_batches": len(train_dataloader)
     })
+    
+    print(f"Dataset loaded: {len(train_dataset)} images, {len(train_dataloader)} batches")
 
+    print("Creating model...")
     model = VQVAE(in_channels=1, 
                   out=1,
                   embedding_dim=args.hidden_dim, 
@@ -231,6 +257,8 @@ def main():
         "model/total_parameters": total_params,
         "model/trainable_parameters": trainable_params
     })
+    
+    print(f"Model created: {total_params:,} total parameters, {trainable_params:,} trainable")
 
     # Optimizer and scheduler
     optimizer, scheduler = setup_optimizer_and_scheduler(model, args)
@@ -260,6 +288,7 @@ def main():
     # Watch model for gradients (optional - can be memory intensive)
     # wandb.watch(model, log="all", log_freq=100)
     
+    print("Starting training...")
     train_vae(model, train_dataloader, optimizer, scheduler, device, checkpoint_path, args, num_epochs=args.max_epoch_num)
     
     # Finish wandb run
