@@ -1,4 +1,4 @@
-data_dir: ../data/normalized_images
+data_dir: ../data/raw_images
 input_dim: 512
 hidden_dim: 512
 latent_dim: 512

@@ -3,25 +3,22 @@ import os
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 import glob
+import csv
 
 def prepare_visualization_data():
     # Load your existing data
-    clusters = np.load("exp/clusters.npy")
-    embeddings = np.load("exp/embeddings.npy")
-    
-    # Get image paths (adjust pattern based on your data structure)
-    data_dir = "../data/normalized_images"
     image_paths = []
-    
-    # Assuming your images are organized in folders or have a consistent naming
-    for root, dirs, files in os.walk(data_dir):
-        for file in files:
-            if file.lower().endswith(('.png', '.jpg', '.jpeg')):
-                image_paths.append(os.path.join(root, file))
-    
-    # Sort to ensure consistent ordering
-    image_paths.sort()
-    
+    clusters = []
+    with open("exp/cluster_labels.csv", newline='') as csvfile:
+        reader = csv.reader(csvfile)
+        next(reader)  # skip header
+        for row in reader:
+            image_paths.append(row[0])
+            clusters.append(int(row[1]))
+            
+    clusters = np.array(clusters)
+    embeddings = np.load("exp/embeddings.npy")
+     
     # Ensure we have the same number of embeddings, clusters, and images
     min_length = min(len(embeddings), len(clusters), len(image_paths))
     embeddings = embeddings[:min_length]

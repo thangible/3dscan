@@ -10,8 +10,9 @@ import torch.nn.functional as F
 from torchvision import transforms
 
 import numpy as np
-from training import parse, vae_loss, set_randomness
+from training import  vae_loss, set_randomness
 from model import VQVAE
+from config.args import parse
 
 
 def setup_optimizer_and_scheduler(model, args):
