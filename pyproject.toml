@@ -5,6 +5,7 @@ description = "Venv for embedding and clustering"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "albumentations>=2.0.8",
     "argparse>=1.4.0",
     "configargparse>=1.7.1",
     "gputil>=1.4.0",

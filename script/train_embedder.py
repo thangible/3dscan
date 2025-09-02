@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from torchvision import transforms
 
 import numpy as np
-from training import  vae_loss, set_randomness
+from training import set_randomness, get_augmentations
 from model import VQVAE
 from config.args import parse
 import wandb
@@ -197,7 +197,7 @@ def train_vae(model, dataloader, optimizer, scheduler, device, checkpoint, args,
         })
         
         # Log reconstruction images every 5 epochs
-        if (epoch-1) % 5 == 0:
+        if (epoch) % 5 == 0:
             print(f"\nLogging reconstruction images for epoch {epoch + 1}...")
             log_reconstruction_images(model, dataloader, device, epoch + 1)
         
