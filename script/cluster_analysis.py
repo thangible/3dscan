@@ -31,8 +31,8 @@ class ClusterAnalyzer:
         self.kmeans_k_values = [2, 3, 5, 8, 10, 15, 20, 25, 30, 50]
         
         # Standard DBSCAN parameters
-        self.dbscan_eps_values = [0.1, 0.3, 0.5, 0.7, 1.0, 1.5, 2.0]
-        self.dbscan_min_samples = [3, 5, 10, 15, 20]
+        self.dbscan_eps_values = [3.0, 5.0, 7.0, 10.0, 15.0]  # Adjusted for higher dimensions
+        self.dbscan_min_samples = [20, 30, 50, 100]  # Adjusted for higher dimensions
         
     def get_embeddings(self, data_loader, model):
         """Extract embeddings from the model"""
