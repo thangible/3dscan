@@ -5,6 +5,7 @@ __pycache__
 .vscode/
 .vscode
 exp
+exp2
 vscode/settings.json
 # C extensions
 *.so
