@@ -344,7 +344,7 @@ def main():
         transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
     ])
     
-    dataset = ImageDataset(args.data_dir, train_flag=True, transforms=None)
+    dataset = ImageDataset(args.data_dir, train_flag=True, transforms=transform)
     dataloader = DataLoader(
         dataset=dataset,
         batch_size=args.batch_size,
