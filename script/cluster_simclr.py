@@ -14,6 +14,7 @@ import numpy as np
 import csv
 import torchvision.models as models
 from lightly.models.modules import SimCLRProjectionHead
+from torchvision.models import ResNet50_Weights
 
 
 def get_embeddings(data_loader, backbone, projection_head, device, use_projection=False):
@@ -68,7 +69,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Build ResNet backbone and projection head (shapes must match training)
-    resnet = models.resnet50(pretrained=False)
+    resnet = models.resnet50(weights=ResNet50_Weights.IMAGENET1K_V1)
     backbone = torch.nn.Sequential(*list(resnet.children())[:-1]).to(device)
 
     projection_head = SimCLRProjectionHead(2048, 2048, 128).to(device)

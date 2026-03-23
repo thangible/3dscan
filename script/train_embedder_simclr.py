@@ -18,6 +18,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import torchvision.utils as vutils
 import torchvision.models as models
+from torchvision.models import ResNet50_Weights
 from config.args import parse
 
 
@@ -236,7 +237,7 @@ def main():
 
     print("Creating model...")
     # Build a ResNet backbone and a SimCLR projection head
-    resnet = models.resnet50(pretrained=True)
+    resnet = models.resnet50(weight = ResNet50_Weights.IMAGENET1K_V1)
     backbone = torch.nn.Sequential(*list(resnet.children())[:-1]).to(device)  # remove final fc
 
     # Optionally freeze backbone unless fine-tuning

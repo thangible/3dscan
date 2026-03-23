@@ -9,6 +9,7 @@ from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bo
 from sklearn.preprocessing import StandardScaler
 # from model import VQVAE
 from dataset import ImageDataset
+from torchvision.models import ResNet50_Weights
 from torch.utils.data import DataLoader
 from config import parse
 from torchvision import transforms
@@ -307,7 +308,7 @@ def main():
     print(f"Using device: {device}")
     
     # Build ResNet backbone and projection head
-    resnet = models.resnet50(pretrained=False)
+    resnet = models.resnet50(weights=ResNet50_Weights.IMAGENET1K_V1)
     backbone = torch.nn.Sequential(*list(resnet.children())[:-1]).to(device)
     projection_head = SimCLRProjectionHead(2048, 2048, 128).to(device)
 

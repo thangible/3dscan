@@ -75,12 +75,12 @@ def main():
     transforms.ToTensor(),
 ])
 
-    dataset = ImageDataset(args.data_dir, train_flag=True, transforms=transform)
+    dataset = ImageDataset(args.data_dir, train_flag=True, transforms=None)
 
     # Dataloaders
     dataloader = DataLoader(
         dataset=dataset,
-        batch_size=args.batch_size,
+        batch_size=8,
         shuffle=False,
         num_workers=0 
     )
