@@ -73,9 +73,10 @@ def main():
 
     projection_head = SimCLRProjectionHead(2048, 2048, 128).to(device)
 
-    checkpoint_path = os.path.join(args.exp, "best_vqvae_model.pth")
+    # Look for SimCLR checkpoint (saved by train_embedder_simclr)
+    checkpoint_path = os.path.join(args.exp, "best_simclr_model.pth")
     if not os.path.exists(checkpoint_path):
-        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}.\nRun training or provide the correct checkpoint path.")
 
     checkpoint = torch.load(checkpoint_path, map_location=device)
 
@@ -92,6 +93,9 @@ def main():
 
         if 'projection_state_dict' in checkpoint:
             projection_head.load_state_dict(checkpoint['projection_state_dict'])
+        elif 'model_state_dict' in checkpoint:
+            # projection head may not be present in older checkpoints
+            pass
     else:
         raise ValueError("Unexpected checkpoint format")
 

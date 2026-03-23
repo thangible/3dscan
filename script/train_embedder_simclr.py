@@ -58,17 +58,19 @@ def train_simclr(backbone, projection_head, dataloader, optimizer, scheduler, de
     criterion = NTXentLoss(temperature=getattr(args, 'temperature', 0.1))
 
     # augmentation pipeline used to create two views from each image
+    # Augmentation pipeline tuned for microstructure images.
+    # Move ToPILImage here and repeat grayscale to 3 channels inside the pipeline.
     aug_pipeline = transforms.Compose([
-        transforms.RandomResizedCrop((args.input_dim, args.input_dim), scale=(0.2, 1.0)),
+        transforms.ToPILImage(),
+        transforms.RandomResizedCrop((args.input_dim, args.input_dim), scale=(0.3, 1.0)),
         transforms.RandomHorizontalFlip(),
-        transforms.ColorJitter(0.4, 0.4, 0.4, 0.1),
-        transforms.GaussianBlur(kernel_size=7, sigma=(0.1, 2.0)),
+        transforms.RandomVerticalFlip(),
+        transforms.RandomRotation(180),
         transforms.ToTensor(),
-        transforms.Normalize([0.5], [0.5])
+        transforms.Lambda(lambda t: t.repeat(3, 1, 1) if t.shape[0] == 1 else t),
+        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
     ])
-
-    # helpers to convert tensor->PIL->augmented tensor
-    to_pil = transforms.ToPILImage()
+    
 
     epoch_pbar = tqdm(range(num_epochs), desc="SimCLR Training", unit="epoch")
 
@@ -83,9 +85,10 @@ def train_simclr(backbone, projection_head, dataloader, optimizer, scheduler, de
             batch_view1 = []
             batch_view2 = []
             for img in inputs:
-                pil = to_pil(img.cpu())
-                v1 = aug_pipeline(pil)
-                v2 = aug_pipeline(pil)
+                # apply augmentation pipeline (ToPILImage inside pipeline handles tensors)
+                cpu_img = img.cpu()
+                v1 = aug_pipeline(cpu_img)
+                v2 = aug_pipeline(cpu_img)
                 batch_view1.append(v1)
                 batch_view2.append(v2)
 
@@ -205,13 +208,11 @@ def main():
             "system/gpu_memory": torch.cuda.get_device_properties(0).total_memory / 1e9
         })
     
-    # Produce 3-channel tensors for pretrained ResNet (repeat grayscale if needed)
+    # Minimal dataset transform: resize and convert to tensor. Augmentations and normalization
+    # (including channel repeat) are applied inside the SimCLR augmentation pipeline.
     transform = transforms.Compose([
         transforms.Resize((args.input_dim, args.input_dim)),
         transforms.ToTensor(),
-        transforms.Lambda(lambda t: t.repeat(3, 1, 1) if t.shape[0] == 1 else t),
-        transforms.RandomHorizontalFlip(),
-        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
     ])
     
     print("Loading dataset...")

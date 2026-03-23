@@ -2,7 +2,7 @@ data_dir: ../data/raw_images
 input_dim: 512
 hidden_dim: 512
 latent_dim: 512
-batch_size: 32
+batch_size: 512
 max_epoch_num: 100
 lr: 1e-3
 weight_decay: 1e-4
