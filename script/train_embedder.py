@@ -18,7 +18,6 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import torchvision.utils as vutils
 
-
 def setup_optimizer_and_scheduler(model, args):
     """
     Sets up optimizer and scheduler for VAE model.
@@ -37,7 +36,6 @@ def setup_optimizer_and_scheduler(model, args):
     )
     
     return optimizer, scheduler
-
 
 def log_reconstruction_images(model, dataloader, device, epoch, num_images=8):
     """
@@ -104,6 +102,7 @@ def log_reconstruction_images(model, dataloader, device, epoch, num_images=8):
         })
     
     model.train()
+
 
 
 def train_vae(model, dataloader, optimizer, scheduler, device, checkpoint, args, num_epochs=20):
@@ -277,7 +276,8 @@ def main():
         },
         tags=["vqvae", "3d-scanner", "clustering"]
     )
-    
+
+
     # Setup device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -368,8 +368,6 @@ def main():
     # Finish wandb run
     wandb.finish()
 
+
 if __name__ == '__main__':
     main()
-
-
-
