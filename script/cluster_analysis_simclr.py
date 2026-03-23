@@ -309,7 +309,7 @@ def main():
     
     # Build ResNet backbone and projection head
     # Use pretrained=False to avoid requiring internet in analysis scripts; training may have been done with pretrained weights.
-    resnet = models.resnet50(pretrained=False)
+    resnet = models.resnet50(weights=ResNet50_Weights.IMAGENET1K_V1)
     backbone = torch.nn.Sequential(*list(resnet.children())[:-1]).to(device)
     projection_head = SimCLRProjectionHead(2048, 2048, 128).to(device)
 
@@ -344,7 +344,7 @@ def main():
         transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
     ])
     
-    dataset = ImageDataset(args.data_dir, train_flag=True, transforms=transform)
+    dataset = ImageDataset(args.data_dir, train_flag=True, transforms=None)
     dataloader = DataLoader(
         dataset=dataset,
         batch_size=args.batch_size,
