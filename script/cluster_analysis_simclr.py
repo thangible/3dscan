@@ -7,7 +7,7 @@ import torch
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
 from sklearn.preprocessing import StandardScaler
-from model import VQVAE
+# from model import VQVAE
 from dataset import ImageDataset
 from torch.utils.data import DataLoader
 from config import parse
@@ -18,12 +18,16 @@ import json
 import matplotlib.pyplot as plt
 from datetime import datetime
 import pickle
+import torchvision.models as models
+from lightly.models.modules import SimCLRProjectionHead
 
 
 class ClusterAnalyzer:
-    def __init__(self, args, device):
+    def __init__(self, args, device, backbone, projection_head=None):
         self.args = args
         self.device = device
+        self.backbone = backbone
+        self.projection_head = projection_head
         self.results_dir = os.path.join(args.exp, "clustering_results")
         os.makedirs(self.results_dir, exist_ok=True)
         
@@ -34,10 +38,13 @@ class ClusterAnalyzer:
         self.dbscan_eps_values = [1.5, 2.0, 2.5, 3.0, 4.0]  # Adjusted for higher-dimensional data
         self.dbscan_min_samples = [15, 20, 30, 40, 50, 60]  # Adjusted for higher-dimensional data
         
-    def get_embeddings(self, data_loader, model):
-        """Extract embeddings from the model"""
+    def get_embeddings(self, data_loader, use_projection=False):
+        """Extract embeddings from the backbone (optionally projection head)"""
         print("Extracting embeddings...")
-        model.eval()
+        self.backbone.eval()
+        if self.projection_head is not None:
+            self.projection_head.eval()
+
         embeddings = []
         file_paths = []
         
@@ -45,18 +52,24 @@ class ClusterAnalyzer:
             for batch_idx, data in enumerate(data_loader):
                 if batch_idx % 10 == 0:
                     print(f"Processing batch {batch_idx}/{len(data_loader)}")
-                    
+
                 inputs, paths = data
                 inputs = inputs.to(self.device)
-                
-                # Get model outputs - adjust for your VQVAE
-                encoded_features = model.encode(inputs)[0]
-                
-                # Global average pooling
-                pooled_features = torch.nn.functional.adaptive_avg_pool2d(encoded_features, (1, 1))
-                embeddings_flat = pooled_features.view(pooled_features.size(0), -1)
-                
-                embeddings.append(embeddings_flat.cpu())
+
+                # forward through backbone
+                h = self.backbone(inputs)
+
+                # If backbone returns spatial feature maps, pool to (1,1)
+                if h.dim() == 4:
+                    h = torch.nn.functional.adaptive_avg_pool2d(h, (1, 1))
+                embeddings_flat = torch.flatten(h, start_dim=1)
+
+                if use_projection and self.projection_head is not None:
+                    z = self.projection_head(embeddings_flat)
+                    embeddings.append(z.cpu())
+                else:
+                    embeddings.append(embeddings_flat.cpu())
+
                 file_paths.extend(paths)
         
         embeddings = torch.cat(embeddings)
@@ -293,25 +306,40 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
-    # Initialize analyzer
-    analyzer = ClusterAnalyzer(args, device)
-    
-    # Load model
-    model = VQVAE(in_channels=1,
-                  out=1,
-                  num_embeddings=args.hidden_dim, 
-                  embedding_dim=args.latent_dim,
-                  img_size=512).to(device)
-    
+    # Build ResNet backbone and projection head
+    resnet = models.resnet50(pretrained=False)
+    backbone = torch.nn.Sequential(*list(resnet.children())[:-1]).to(device)
+    projection_head = SimCLRProjectionHead(2048, 2048, 128).to(device)
+
+    # Load checkpoint (expects keys saved by training script)
     checkpoint_path = os.path.join(args.exp, "best_vqvae_model.pth")
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
     checkpoint = torch.load(checkpoint_path, map_location=device)
-    model.load_state_dict(checkpoint["model_state_dict"])
+
+    if isinstance(checkpoint, dict):
+        if 'backbone_state_dict' in checkpoint:
+            backbone.load_state_dict(checkpoint['backbone_state_dict'])
+        elif 'model_state_dict' in checkpoint:
+            try:
+                backbone.load_state_dict(checkpoint['model_state_dict'], strict=False)
+            except Exception:
+                print("Warning: could not load 'model_state_dict' into backbone with strict=False")
+
+        if 'projection_state_dict' in checkpoint:
+            projection_head.load_state_dict(checkpoint['projection_state_dict'])
+    else:
+        raise ValueError("Unexpected checkpoint format")
+
+    # Initialize analyzer with backbone and projection head
+    analyzer = ClusterAnalyzer(args, device, backbone, projection_head)
     
-    # Setup data
+    # Setup data: ensure 3-channel input for ResNet
     transform = transforms.Compose([
-        transforms.Grayscale(num_output_channels=1),
-        transforms.Resize((512, 512)),
+        transforms.Resize((args.input_dim, args.input_dim)),
         transforms.ToTensor(),
+        transforms.Lambda(lambda t: t.repeat(3, 1, 1) if t.shape[0] == 1 else t),
+        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
     ])
     
     dataset = ImageDataset(args.data_dir, train_flag=True, transforms=transform)
@@ -322,8 +350,9 @@ def main():
         num_workers=0 
     )
     
-    # Extract embeddings
-    embeddings, file_paths = analyzer.get_embeddings(dataloader, model)
+    # Extract embeddings: choose projection or backbone features
+    use_projection = getattr(args, 'use_projection_for_clustering', False)
+    embeddings, file_paths = analyzer.get_embeddings(dataloader, use_projection=use_projection)
     
     # Save raw embeddings
     embeddings_path = os.path.join(analyzer.results_dir, "raw_embeddings.npy")
