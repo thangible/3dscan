@@ -308,14 +308,15 @@ def main():
     print(f"Using device: {device}")
     
     # Build ResNet backbone and projection head
-    resnet = models.resnet50(weights=ResNet50_Weights.IMAGENET1K_V1)
+    # Use pretrained=False to avoid requiring internet in analysis scripts; training may have been done with pretrained weights.
+    resnet = models.resnet50(pretrained=False)
     backbone = torch.nn.Sequential(*list(resnet.children())[:-1]).to(device)
     projection_head = SimCLRProjectionHead(2048, 2048, 128).to(device)
 
     # Load checkpoint (expects keys saved by training script)
-    checkpoint_path = os.path.join(args.exp, "best_vqvae_model.pth")
+    checkpoint_path = os.path.join(args.exp, "best_simclr_model.pth")
     if not os.path.exists(checkpoint_path):
-        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}. Run SimCLR training or point to the correct checkpoint.")
     checkpoint = torch.load(checkpoint_path, map_location=device)
 
     if isinstance(checkpoint, dict):
@@ -335,11 +336,11 @@ def main():
     # Initialize analyzer with backbone and projection head
     analyzer = ClusterAnalyzer(args, device, backbone, projection_head)
     
-    # Setup data: ensure 3-channel input for ResNet
+    # Setup data: convert to grayscale (3-channel) and resize to match training
     transform = transforms.Compose([
         transforms.Resize((args.input_dim, args.input_dim)),
+        transforms.Grayscale(num_output_channels=3),
         transforms.ToTensor(),
-        transforms.Lambda(lambda t: t.repeat(3, 1, 1) if t.shape[0] == 1 else t),
         transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
     ])
     
