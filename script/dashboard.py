@@ -337,8 +337,9 @@ app.layout = html.Div([
             html.Button("⤢ Fullscreen", id="fullscreen-btn", n_clicks=0, style={'marginBottom':'8px'}),
             dcc.Graph(id="main-graph", clear_on_unhover=True, style={'width': '100%', 'height': '100%'}),
             dcc.Tooltip(id="graph-tooltip")
-        ], id='graph-container', style={'flex': '1 1 0%', 'boxSizing': 'border-box', 'padding': '8px', 'minWidth': '320px', 'height': '100%','overflow': 'hidden'}),
-        
+        ], id='graph-container', style={'flex': '1 1 0%', 'boxSizing': 'border-box', 'padding': '8px', 'minWidth': '200px', 'height': '100%','overflow': 'hidden'}),
+        # Resizer between graph and image panel
+        html.Div(id='resizer', style={'width': '8px', 'cursor': 'col-resize', 'backgroundColor': 'transparent', 'height': '100%'}),
         # Image panel: fixed width, scrollable internally
         html.Div([
             dcc.Store(id='image-page', data=0),
@@ -378,9 +379,67 @@ app.layout = html.Div([
             ], style={'marginBottom': '8px'}),
 
             html.Div(id='image-grid', children=[], style={'display': 'grid', 'gridTemplateColumns': f'repeat(auto-fit, minmax({IMAGE_SIZE_MIN}px, 1fr))', 'gap': '8px', 'width': '100%', 'justifyItems': 'center', 'alignItems': 'start', 'flex': '1 1 auto', 'overflow': 'hidden', 'gridAutoRows': 'auto'})
-         ], id='image-panel', style={'flex': '0 0 360px', 'boxSizing': 'border-box', 'padding': '8px', 'minWidth': '280px', 'maxWidth': '420px', 'height': '100%', 'overflow': 'hidden', 'display': 'flex', 'flexDirection': 'column', 'backgroundColor': '#ffffff', 'borderLeft': '1px solid #e6e6e6'}),
+         ], id='image-panel', style={'flex': '0 0 40%', 'width': '360px', 'boxSizing': 'border-box', 'padding': '8px', 'minWidth': f'{IMAGE_SIZE_MIN + 40}px', 'height': '100%', 'overflow': 'hidden', 'display': 'flex', 'flexDirection': 'column', 'backgroundColor': '#ffffff', 'borderLeft': '1px solid #e6e6e6'}),
      ], style={'display': 'flex', 'flex': '1 1 0%', 'alignItems': 'stretch', 'overflow': 'hidden', 'gap': '8px'}),
 ], style={'display': 'flex', 'flexDirection': 'column', 'height': '100vh', 'overflow': 'hidden', 'fontFamily': 'Arial, sans-serif', 'padding': '6px'})
+
+# Client-side script to make the resizer draggable and resize panes
+app.layout.children.append(html.Script(f"""
+(function(){{
+  const minRight = {IMAGE_SIZE_MIN} + 40; // minimum image panel width
+  const minLeft = 200; // minimum plot width
+  const resizer = document.getElementById('resizer');
+  const left = document.getElementById('graph-container');
+  const right = document.getElementById('image-panel');
+  if (!resizer || !left || !right) return;
+
+  let dragging = false;
+  let startX = 0;
+  let startRightWidth = 0;
+  let resizerWidth = resizer.getBoundingClientRect().width || 8;
+
+  function applySizes(rightWidth) {{
+    const container = left.parentElement.getBoundingClientRect();
+    const maxRight = container.width - minLeft - resizerWidth;
+    const clamped = Math.max(minRight, Math.min(rightWidth, maxRight));
+    const leftWidth = container.width - clamped - resizerWidth;
+    // set explicit widths so flex adjusts predictably
+    right.style.flex = '0 0 ' + clamped + 'px';
+    right.style.width = clamped + 'px';
+    left.style.flex = '0 0 ' + leftWidth + 'px';
+    left.style.width = leftWidth + 'px';
+  }}
+
+  resizer.addEventListener('mousedown', function(e) {{
+    dragging = true;
+    startX = e.clientX;
+    startRightWidth = right.getBoundingClientRect().width;
+    resizerWidth = resizer.getBoundingClientRect().width || 8;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }});
+
+  document.addEventListener('mousemove', function(e) {{
+    if (!dragging) return;
+    const dx = e.clientX - startX;
+    const newRight = startRightWidth - dx; // moving mouse right decreases right pane
+    applySizes(newRight);
+  }});
+
+  document.addEventListener('mouseup', function(e) {{
+    if (!dragging) return;
+    dragging = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  }});
+
+  // Make the layout responsive when window resizes: keep right pane if set, else revert flex
+  window.addEventListener('resize', function() {{
+    const rightWidth = right.getBoundingClientRect().width;
+    applySizes(rightWidth);
+  }});
+}})();
+"""))
 
 @callback(
     [Output("main-graph", "figure"),
@@ -598,7 +657,7 @@ def toggle_fullscreen(n_clicks):
     
     # Image panel styles to accompany fullscreen/normal modes. When graph is fixed to left half,
     # keep the image panel fixed to the right half so it remains visible and clipped.
-    normal_image_panel_style = {'flex': '0 0 30%', 'boxSizing': 'border-box', 'margin': '0', 'overflow': 'hidden', 'minWidth': '320px', 'height': '100%'}
+    normal_image_panel_style = {'flex': '0 0 40%', 'boxSizing': 'border-box', 'margin': '0', 'overflow': 'hidden', 'minWidth': '320px', 'height': '100%'}
     fullscreen_image_panel_style = {
         'position': 'fixed',
         'top': '0',
