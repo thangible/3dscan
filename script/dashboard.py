@@ -326,7 +326,7 @@ app.layout = html.Div([
                 html.Span(id='page-indicator', children='Page 1', style={'marginRight': '8px'}),
                 html.Button('Next ▶', id='next-btn', n_clicks=0)
             ], style={'marginBottom': '8px', 'display': 'flex', 'alignItems': 'center'}),
-            html.Div(id='image-grid', children=[], style={'display': 'grid', 'gridTemplateColumns': '1fr 1fr', 'gap': '8px', 'width': '100%', 'justifyItems': 'center', 'alignItems': 'center', 'flex': '1 1 auto', 'overflow': 'hidden', 'gridAutoRows': 'min-content'})
+            html.Div(id='image-grid', children=[], style={'display': 'grid', 'gridTemplateColumns': 'repeat(auto-fit, minmax(120px, 1fr))', 'gap': '8px', 'width': '100%', 'justifyItems': 'center', 'alignItems': 'start', 'flex': '1 1 auto', 'overflow': 'hidden', 'gridAutoRows': 'auto'})
         ], id='image-panel', style={'flex': '0 0 360px', 'boxSizing': 'border-box', 'padding': '8px', 'minWidth': '280px', 'maxWidth': '420px', 'height': '100%', 'overflow': 'hidden', 'display': 'flex', 'flexDirection': 'column', 'backgroundColor': '#ffffff', 'borderLeft': '1px solid #e6e6e6'}),
     ], style={'display': 'flex', 'flex': '1 1 0%', 'alignItems': 'stretch', 'overflow': 'hidden', 'gap': '8px'}),
 ], style={'display': 'flex', 'flexDirection': 'column', 'height': '100vh', 'overflow': 'hidden', 'fontFamily': 'Arial, sans-serif', 'padding': '6px'})
@@ -671,11 +671,13 @@ def update_image_grid_and_page(prev_clicks, next_clicks, cluster_value, clusteri
         img_path = image_paths[idx] if idx < len(image_paths) else None
         img_src = dashboard.encode_image(img_path) if img_path else None
         if img_src:
-            # compact centered 1:1 thumbnail
+            # compact centered 1:1 thumbnail (responsive: max size but will shrink to fit)
             tile = html.Div([
                 html.Img(src=img_src, style={
-                    'width': '400px',
-                    'height': '400px',
+                    'maxWidth': '400px',
+                    'maxHeight': '400px',
+                    'width': '100%',
+                    'height': 'auto',
                     'objectFit': 'cover',
                     'borderRadius': '6px'
                 }),
@@ -684,9 +686,9 @@ def update_image_grid_and_page(prev_clicks, next_clicks, cluster_value, clusteri
                     'fontSize': '12px',
                     'marginTop': '6px',
                     'wordBreak': 'break-all',
-                    'maxWidth': '140px'
+                    'maxWidth': '100%'
                 })
-            ], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'justifyContent': 'center', 'height': '100%','gap':'6px'})
+            ], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'justifyContent': 'flex-start', 'width': '100%', 'maxWidth': '400px', 'boxSizing': 'border-box', 'gap':'6px'})
             children.append(tile)
         else:
             placeholder = html.Div([
@@ -709,11 +711,13 @@ def update_image_grid_and_page(prev_clicks, next_clicks, cluster_value, clusteri
                 'alignItems': 'center',
                 'justifyContent': 'center',
                 'color': '#7f8c8d',
-                'fontSize': '24px'
+                'fontSize': '24px',
+                'maxWidth': '400px',
+                'boxSizing': 'border-box'
             })
             wrapped = html.Div([placeholder, html.Div(os.path.basename(img_path) if img_path else 'No image', style={
-                'textAlign': 'center', 'fontSize': '12px', 'marginTop': '6px', 'wordBreak': 'break-all', 'maxWidth': '140px'
-            })], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'height': '100%','gap':'6px'})
+                'textAlign': 'center', 'fontSize': '12px', 'marginTop': '6px', 'wordBreak': 'break-all', 'maxWidth': '100%'
+            })], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'width': '100%', 'maxWidth': '400px', 'boxSizing': 'border-box','gap':'6px'})
             children.append(wrapped)
 
     display = f'Page {page + 1} of {max_pages}' if max_pages > 0 else 'Page 0 of 0'
