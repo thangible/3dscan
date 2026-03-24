@@ -233,6 +233,25 @@ class ClusterVisualizationDashboard:
         
         return fig
 
+    def get_color_map(self, clusters):
+        """Compute a color map for cluster labels. Noise (-1) -> lightgray."""
+        if clusters is None:
+            return {}
+        unique = np.unique(clusters)
+        # Use a qualitative palette and cycle if needed
+        palette = px.colors.qualitative.Set3
+        color_map = {}
+        # If noise (-1) present, assign a light gray and map other clusters
+        if -1 in unique:
+            non_noise = [int(c) for c in unique if int(c) != -1]
+            for i, c in enumerate(non_noise):
+                color_map[int(c)] = palette[i % len(palette)]
+            color_map[-1] = 'lightgray'
+        else:
+            for i, c in enumerate(unique):
+                color_map[int(c)] = palette[i % len(palette)]
+        return color_map
+
 # Initialize dashboard
 dashboard = ClusterVisualizationDashboard()
 
@@ -241,6 +260,7 @@ app = Dash(__name__)
 
 # Compact header and full-height layout so main area can fill viewport without scrolling
 app.layout = html.Div([
+
     # Header row: title and controls
     html.Div([
         html.H1("🎯 Interactive Cluster Visualization Dashboard",
@@ -326,7 +346,35 @@ app.layout = html.Div([
                 html.Span(id='page-indicator', children='Page 1', style={'marginRight': '8px'}),
                 html.Button('Next ▶', id='next-btn', n_clicks=0)
             ], style={'marginBottom': '8px', 'display': 'flex', 'alignItems': 'center'}),
-            html.Div(id='image-grid', children=[], style={'display': 'grid', 'gridTemplateColumns': 'repeat(auto-fit, minmax(120px, 1fr))', 'gap': '8px', 'width': '100%', 'justifyItems': 'center', 'alignItems': 'start', 'flex': '1 1 auto', 'overflow': 'hidden', 'gridAutoRows': 'auto'})
+
+            # Controls: images per page dropdown and image size slider
+            html.Div([
+                html.Div([
+                    html.Label("Images / page:", style={'marginRight':'6px'}),
+                    dcc.Dropdown(
+                        id='images-per-page-dropdown',
+                        options=[{'label': str(i), 'value': i} for i in range(1, 10)],
+                        value=4,
+                        clearable=False,
+                        style={'width': '90px', 'display': 'inline-block', 'marginRight': '12px'}
+                    ),
+                    html.Label("Size:", style={'marginLeft':'8px', 'marginRight':'6px'}),
+                    dcc.Slider(
+                        id='image-size-slider',
+                        min=80,
+                        max=400,
+                        step=10,
+                        value=200,
+                        marks={80: '80', 200: '200', 400: '400'},
+                        tooltip={'placement': 'bottom', 'always_visible': False},
+                        updatemode='mouseup',
+                        vertical=False,
+                        # narrow display; actual layout controlled by parent
+                    )
+                ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8px', 'width': '100%'}),
+            ], style={'marginBottom': '8px'}),
+
+            html.Div(id='image-grid', children=[], style={'display': 'grid', 'gridTemplateColumns': 'repeat(auto-fit, minmax(80px, 1fr))', 'gap': '8px', 'width': '100%', 'justifyItems': 'center', 'alignItems': 'start', 'flex': '1 1 auto', 'overflow': 'hidden', 'gridAutoRows': 'auto'})
         ], id='image-panel', style={'flex': '0 0 360px', 'boxSizing': 'border-box', 'padding': '8px', 'minWidth': '280px', 'maxWidth': '420px', 'height': '100%', 'overflow': 'hidden', 'display': 'flex', 'flexDirection': 'column', 'backgroundColor': '#ffffff', 'borderLeft': '1px solid #e6e6e6'}),
     ], style={'display': 'flex', 'flex': '1 1 0%', 'alignItems': 'stretch', 'overflow': 'hidden', 'gap': '8px'}),
 ], style={'display': 'flex', 'flexDirection': 'column', 'height': '100vh', 'overflow': 'hidden', 'fontFamily': 'Arial, sans-serif', 'padding': '6px'})
@@ -400,6 +448,7 @@ def update_graph_and_info(clustering_key, plot_type):
         html.Div([
             html.Div([
                 html.Div([
+
                     html.H5("Parameters:", style={'color': '#34495e', 'marginBottom': '5px'}),
                     html.P(str(result_info['params']), style={'fontSize': '14px', 'margin': '0', 'wordBreak': 'break-all'})
                 ], style={'minWidth': '220px', 'marginRight': '20px'}) ,
@@ -614,10 +663,10 @@ def update_cluster_options_and_images(clustering_key):
 
 @callback(
     [Output('image-grid', 'children'), Output('image-page', 'data'), Output('page-indicator', 'children')],
-    [Input('prev-btn', 'n_clicks'), Input('next-btn', 'n_clicks'), Input('cluster-select', 'value'), Input('clustering-dropdown', 'value')],
+    [Input('prev-btn', 'n_clicks'), Input('next-btn', 'n_clicks'), Input('cluster-select', 'value'), Input('clustering-dropdown', 'value'), Input('images-per-page-dropdown', 'value'), Input('image-size-slider', 'value')],
     [State('image-page', 'data')]
 )
-def update_image_grid_and_page(prev_clicks, next_clicks, cluster_value, clustering_key, current_page):
+def update_image_grid_and_page(prev_clicks, next_clicks, cluster_value, clustering_key, images_per_page, image_size, current_page):
     """Manage pagination and update image grid, page store, and page indicator in a single callback.
     This avoids race conditions between separate callbacks.
     """
@@ -637,7 +686,8 @@ def update_image_grid_and_page(prev_clicks, next_clicks, cluster_value, clusteri
 
     cluster_indices = np.where(clusters == cluster_value)[0]
     total = len(cluster_indices)
-    per_page = 4
+    # per_page controlled by dropdown (default 4)
+    per_page = int(images_per_page) if images_per_page else 4
     max_pages = (total + per_page - 1) // per_page if total > 0 else 0
 
     # Determine trigger
@@ -646,7 +696,8 @@ def update_image_grid_and_page(prev_clicks, next_clicks, cluster_value, clusteri
 
     # Determine current page
     page = int(current_page) if current_page is not None else 0
-    if trig_id in ('cluster-select', 'clustering-dropdown'):
+    # Reset page when cluster or per-page setting changes
+    if trig_id in ('cluster-select', 'clustering-dropdown', 'images-per-page-dropdown'):
         page = 0
     elif trig_id == 'next-btn':
         if page < max_pages - 1:
@@ -666,20 +717,36 @@ def update_image_grid_and_page(prev_clicks, next_clicks, cluster_value, clusteri
     end = start + per_page
     indices = cluster_indices[start:end]
 
+    # Compute color map for clusters so image tiles can show the same color as plot
+    color_map = dashboard.get_color_map(clusters)
+    selected_color = color_map.get(int(cluster_value), '#cccccc')
+
+    # image_size from slider (px). fallback to 200 if None
+    img_size = int(image_size) if image_size else 200
+
     children = []
     for idx in indices:
         img_path = image_paths[idx] if idx < len(image_paths) else None
         img_src = dashboard.encode_image(img_path) if img_path else None
+        # color indicator for this image's actual class
+        tile_color = color_map.get(int(clusters[idx]), selected_color)
         if img_src:
-            # compact centered 1:1 thumbnail (responsive: max size but will shrink to fit)
+            # compact centered responsive thumbnail with colored top bar and subtle border
             tile = html.Div([
+                html.Div(style={
+                    'height': '8px',
+                    'width': '100%',
+                    'backgroundColor': tile_color,
+                    'borderRadius': '6px 6px 0 0'
+                }),
                 html.Img(src=img_src, style={
-                    'maxWidth': '400px',
-                    'maxHeight': '400px',
+                    'maxWidth': f'{img_size}px',
+                    'maxHeight': f'{img_size}px',
                     'width': '100%',
                     'height': 'auto',
                     'objectFit': 'cover',
-                    'borderRadius': '6px'
+                    'borderRadius': '6px',
+                    'border': f'2px solid {tile_color}'
                 }),
                 html.Div(os.path.basename(img_path) if img_path else 'No image', style={
                     'textAlign': 'center',
@@ -688,7 +755,7 @@ def update_image_grid_and_page(prev_clicks, next_clicks, cluster_value, clusteri
                     'wordBreak': 'break-all',
                     'maxWidth': '100%'
                 })
-            ], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'justifyContent': 'flex-start', 'width': '100%', 'maxWidth': '400px', 'boxSizing': 'border-box', 'gap':'6px'})
+            ], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'justifyContent': 'flex-start', 'width': '100%', 'maxWidth': f'{img_size}px', 'boxSizing': 'border-box', 'gap':'6px'})
             children.append(tile)
         else:
             placeholder = html.Div([
@@ -712,12 +779,18 @@ def update_image_grid_and_page(prev_clicks, next_clicks, cluster_value, clusteri
                 'justifyContent': 'center',
                 'color': '#7f8c8d',
                 'fontSize': '24px',
-                'maxWidth': '400px',
-                'boxSizing': 'border-box'
+                'maxWidth': f'{img_size}px',
+                'boxSizing': 'border-box',
+                'border': f'2px solid {tile_color}'
             })
-            wrapped = html.Div([placeholder, html.Div(os.path.basename(img_path) if img_path else 'No image', style={
+            wrapped = html.Div([html.Div(style={
+                'height': '8px',
+                'width': '100%',
+                'backgroundColor': tile_color,
+                'borderRadius': '6px 6px 0 0'
+            }), placeholder, html.Div(os.path.basename(img_path) if img_path else 'No image', style={
                 'textAlign': 'center', 'fontSize': '12px', 'marginTop': '6px', 'wordBreak': 'break-all', 'maxWidth': '100%'
-            })], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'width': '100%', 'maxWidth': '400px', 'boxSizing': 'border-box','gap':'6px'})
+            })], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'width': '100%', 'maxWidth': f'{img_size}px', 'boxSizing': 'border-box','gap':'6px'})
             children.append(wrapped)
 
     display = f'Page {page + 1} of {max_pages}' if max_pages > 0 else 'Page 0 of 0'
