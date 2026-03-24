@@ -10,6 +10,9 @@ import plotly.graph_objects as go
 import plotly.express as px
 import dash
 
+IMAGE_SIZE_MIN = 80
+IMAGE_SIZE_MAX = 800
+
 class ClusterVisualizationDashboard:
     def __init__(self, clustering_results_dir="exp/clustering_results"):
         self.clustering_results_dir = clustering_results_dir
@@ -361,11 +364,11 @@ app.layout = html.Div([
                     html.Label("Size:", style={'marginLeft':'8px', 'marginRight':'6px'}),
                     dcc.Slider(
                         id='image-size-slider',
-                        min=80,
-                        max=400,
+                        min=IMAGE_SIZE_MIN,
+                        max=IMAGE_SIZE_MAX,
                         step=10,
                         value=200,
-                        marks={80: '80', 200: '200', 400: '400'},
+                        marks={IMAGE_SIZE_MIN: str(IMAGE_SIZE_MIN), (IMAGE_SIZE_MIN+IMAGE_SIZE_MAX)//2: str((IMAGE_SIZE_MIN+IMAGE_SIZE_MAX)//2), IMAGE_SIZE_MAX: str(IMAGE_SIZE_MAX)},
                         tooltip={'placement': 'bottom', 'always_visible': False},
                         updatemode='mouseup',
                         vertical=False,
@@ -374,9 +377,9 @@ app.layout = html.Div([
                 ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8px', 'width': '100%'}),
             ], style={'marginBottom': '8px'}),
 
-            html.Div(id='image-grid', children=[], style={'display': 'grid', 'gridTemplateColumns': 'repeat(auto-fit, minmax(80px, 1fr))', 'gap': '8px', 'width': '100%', 'justifyItems': 'center', 'alignItems': 'start', 'flex': '1 1 auto', 'overflow': 'hidden', 'gridAutoRows': 'auto'})
-        ], id='image-panel', style={'flex': '0 0 360px', 'boxSizing': 'border-box', 'padding': '8px', 'minWidth': '280px', 'maxWidth': '420px', 'height': '100%', 'overflow': 'hidden', 'display': 'flex', 'flexDirection': 'column', 'backgroundColor': '#ffffff', 'borderLeft': '1px solid #e6e6e6'}),
-    ], style={'display': 'flex', 'flex': '1 1 0%', 'alignItems': 'stretch', 'overflow': 'hidden', 'gap': '8px'}),
+            html.Div(id='image-grid', children=[], style={'display': 'grid', 'gridTemplateColumns': f'repeat(auto-fit, minmax({IMAGE_SIZE_MIN}px, 1fr))', 'gap': '8px', 'width': '100%', 'justifyItems': 'center', 'alignItems': 'start', 'flex': '1 1 auto', 'overflow': 'hidden', 'gridAutoRows': 'auto'})
+         ], id='image-panel', style={'flex': '0 0 360px', 'boxSizing': 'border-box', 'padding': '8px', 'minWidth': '280px', 'maxWidth': '420px', 'height': '100%', 'overflow': 'hidden', 'display': 'flex', 'flexDirection': 'column', 'backgroundColor': '#ffffff', 'borderLeft': '1px solid #e6e6e6'}),
+     ], style={'display': 'flex', 'flex': '1 1 0%', 'alignItems': 'stretch', 'overflow': 'hidden', 'gap': '8px'}),
 ], style={'display': 'flex', 'flexDirection': 'column', 'height': '100vh', 'overflow': 'hidden', 'fontFamily': 'Arial, sans-serif', 'padding': '6px'})
 
 @callback(
@@ -722,7 +725,15 @@ def update_image_grid_and_page(prev_clicks, next_clicks, cluster_value, clusteri
     selected_color = color_map.get(int(cluster_value), '#cccccc')
 
     # image_size from slider (px). fallback to 200 if None
-    img_size = int(image_size) if image_size else 200
+    # Clamp image size to allowed min/max values so slider controls enforced limits
+    try:
+        img_size = int(image_size) if image_size is not None else 200
+    except Exception:
+        img_size = 200
+    if img_size < IMAGE_SIZE_MIN:
+        img_size = IMAGE_SIZE_MIN
+    if img_size > IMAGE_SIZE_MAX:
+        img_size = IMAGE_SIZE_MAX
 
     children = []
     for idx in indices:
@@ -755,7 +766,7 @@ def update_image_grid_and_page(prev_clicks, next_clicks, cluster_value, clusteri
                     'wordBreak': 'break-all',
                     'maxWidth': '100%'
                 })
-            ], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'justifyContent': 'flex-start', 'width': '100%', 'maxWidth': f'{img_size}px', 'boxSizing': 'border-box', 'gap':'6px'})
+            ], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'justifyContent': 'flex-start', 'width': '100%', 'minWidth': f'{IMAGE_SIZE_MIN}px', 'maxWidth': f'{img_size}px', 'boxSizing': 'border-box', 'gap':'6px'})
             children.append(tile)
         else:
             placeholder = html.Div([
@@ -783,14 +794,32 @@ def update_image_grid_and_page(prev_clicks, next_clicks, cluster_value, clusteri
                 'boxSizing': 'border-box',
                 'border': f'2px solid {tile_color}'
             })
-            wrapped = html.Div([html.Div(style={
-                'height': '8px',
+
+            wrapped = html.Div([
+                html.Div(style={
+                    'height': '8px',
+                    'width': '100%',
+                    'backgroundColor': tile_color,
+                    'borderRadius': '6px 6px 0 0'
+                }),
+                placeholder,
+                html.Div(os.path.basename(img_path) if img_path else 'No image', style={
+                    'textAlign': 'center',
+                    'fontSize': '12px',
+                    'marginTop': '6px',
+                    'wordBreak': 'break-all',
+                    'maxWidth': '100%'
+                })
+            ], style={
+                'display': 'flex',
+                'flexDirection': 'column',
+                'alignItems': 'center',
                 'width': '100%',
-                'backgroundColor': tile_color,
-                'borderRadius': '6px 6px 0 0'
-            }), placeholder, html.Div(os.path.basename(img_path) if img_path else 'No image', style={
-                'textAlign': 'center', 'fontSize': '12px', 'marginTop': '6px', 'wordBreak': 'break-all', 'maxWidth': '100%'
-            })], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'width': '100%', 'maxWidth': f'{img_size}px', 'boxSizing': 'border-box','gap':'6px'})
+                'maxWidth': f'{img_size}px',
+                'boxSizing': 'border-box',
+                'gap': '6px'
+            })
+
             children.append(wrapped)
 
     display = f'Page {page + 1} of {max_pages}' if max_pages > 0 else 'Page 0 of 0'
