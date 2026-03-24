@@ -5,9 +5,10 @@ import os
 import json
 import glob
 from PIL import Image
-from dash import Dash, dcc, html, Input, Output, no_update, callback
+from dash import Dash, dcc, html, Input, Output, State, no_update, callback
 import plotly.graph_objects as go
 import plotly.express as px
+import dash
 
 class ClusterVisualizationDashboard:
     def __init__(self, clustering_results_dir="exp/clustering_results"):
@@ -278,14 +279,39 @@ app.layout = html.Div([
         'boxShadow': '0 2px 4px rgba(0,0,0,0.1)'
     }),
     
-    # Main graph with fullscreen support
+    # Graph (left) + Image panel (right) split 50/50
     html.Div([
+        # Left: plot - 50%
         html.Div([
             html.Button("⤢ Fullscreen", id="fullscreen-btn", n_clicks=0, style={'marginBottom':'10px'}),
             dcc.Graph(id="main-graph", clear_on_unhover=True, style={'width': '100%', 'height': '500px'}),
             dcc.Tooltip(id="graph-tooltip")
-        ], id='graph-container', style={'margin': '20px'})
-    ]),
+        ], id='graph-container', style={'width': '50%', 'margin': '20px'}),
+        
+        # Right: images and controls - 50%
+        html.Div([
+            # store current page for pagination
+            dcc.Store(id='image-page', data=0),
+            
+            html.Label("🖼️ Show images for cluster:", style={'fontWeight': 'bold', 'marginBottom': '10px'}),
+            dcc.Dropdown(id='cluster-select', options=[], value=None, style={'width': '100%', 'marginBottom': '10px'}),
+            
+            # pagination controls
+            html.Div([
+                html.Button('◀ Prev', id='prev-btn', n_clicks=0, style={'marginRight': '10px'}),
+                html.Span(id='page-indicator', children='Page 1', style={'marginRight': '10px'}),
+                html.Button('Next ▶', id='next-btn', n_clicks=0)
+            ], style={'marginBottom': '10px'}),
+            
+            # image grid (2x2)
+            html.Div(id='image-grid', children=[], style={
+                'display': 'grid',
+                'gridTemplateColumns': '1fr 1fr',
+                'gap': '10px',
+                'width': '100%'
+            })
+        ], id='image-panel', style={'width': '50%', 'margin': '20px'})
+    ], style={'display': 'flex', 'alignItems': 'flex-start'}),
     
     # Method info panel
     html.Div(id="method-info", style={
@@ -324,6 +350,12 @@ def update_graph_and_info(clustering_key, plot_type):
         return empty_fig, html.Div("❌ Visualization data not available")
     
     # Update dashboard state
+    # Ensure viz_data carries the experiment key so other callbacks can reference it
+    if 'experiment_name' not in viz_data or not viz_data.get('experiment_name'):
+        try:
+            viz_data['experiment_name'] = clustering_key
+        except Exception:
+            pass
     dashboard.current_viz_data = viz_data
     
     # Get embeddings based on plot type
@@ -471,37 +503,212 @@ def update_method_info(plot_type):
         ])
 
 @callback(
-    [Output("graph-container", "style"), Output("fullscreen-btn", "children"), Output("main-graph", "style")],
+    [Output("graph-container", "style"), Output("fullscreen-btn", "children"), Output("main-graph", "style"), Output("image-panel", "style")],
     [Input("fullscreen-btn", "n_clicks")]
 )
 def toggle_fullscreen(n_clicks):
     """Toggle the main graph between normal and fullscreen modes using the button.
     Uses the parity of n_clicks to switch state.
     """
-    # Default (normal) style
-    normal_container_style = {'margin': '20px'}
+    # Default (normal) styles - keep a consistent half-screen split using flex basis so layout doesn't collapse
+    normal_container_style = {'flex': '0 0 50%', 'boxSizing': 'border-box', 'margin': '20px', 'minWidth': '320px'}
     normal_button_text = '⤢ Fullscreen'
     normal_graph_style = {'width': '100%', 'height': '500px'}
 
     # Fullscreen styles
+    # Keep the graph fixed to the left half of the screen when toggled to fullscreen.
     fullscreen_container_style = {
         'position': 'fixed',
         'top': '0',
         'left': '0',
-        'width': '100%',
+        'width': '50%',
         'height': '100%',
         'zIndex': '9999',
         'backgroundColor': '#ffffff',
         'padding': '20px',
-        'overflow': 'auto'
+        'overflow': 'auto',
+        'boxSizing': 'border-box'
     }
     fullscreen_button_text = '⤡ Exit Fullscreen'
     fullscreen_graph_style = {'width': '100%', 'height': 'calc(100vh - 80px)'}
+    
+    # Image panel styles to accompany fullscreen/normal modes. When graph is fixed to left half,
+    # keep the image panel fixed to the right half so it remains visible and clipped.
+    normal_image_panel_style = {'flex': '0 0 50%', 'boxSizing': 'border-box', 'margin': '20px', 'overflow': 'auto', 'minWidth': '320px'}
+    fullscreen_image_panel_style = {
+        'position': 'fixed',
+        'top': '0',
+        'right': '0',
+        'width': '50%',
+        'height': '100%',
+        'zIndex': '9998',
+        'overflow': 'auto',
+        'backgroundColor': '#ffffff',
+        'padding': '20px',
+        'boxSizing': 'border-box'
+    }
 
     if not n_clicks or (n_clicks % 2 == 0):
-        return normal_container_style, normal_button_text, normal_graph_style
+        return normal_container_style, normal_button_text, normal_graph_style, normal_image_panel_style
     else:
-        return fullscreen_container_style, fullscreen_button_text, fullscreen_graph_style
+        return fullscreen_container_style, fullscreen_button_text, fullscreen_graph_style, fullscreen_image_panel_style
+
+# New callbacks to populate cluster dropdown and show images (uses visualization data image paths)
+@callback(
+    [Output('cluster-select', 'options'), Output('cluster-select', 'value')],
+    [Input('clustering-dropdown', 'value')]
+)
+def update_cluster_options_and_images(clustering_key):
+    """Populate cluster options and initial image grid when clustering selection changes."""
+    if clustering_key is None:
+        return [], None
+
+    # Prefer the already-loaded visualization data if it matches, otherwise load from disk
+    viz_data = None
+    if dashboard.current_viz_data is not None:
+        # Try to detect matching experiment by file path or experiment_name
+        try:
+            if dashboard.current_viz_data.get('experiment_name') == clustering_key:
+                viz_data = dashboard.current_viz_data
+        except Exception:
+            viz_data = None
+
+    if viz_data is None:
+        viz_data = dashboard.load_visualization_data(clustering_key)
+    if viz_data is None:
+        return [], None
+
+    clusters = np.array(viz_data.get('clusters', []))
+    image_paths = list(viz_data.get('image_paths', []))
+
+    if clusters.size == 0:
+        return [], None
+
+    unique = np.unique(clusters)
+    options = []
+    for c in unique:
+        label = 'Noise (-1)' if int(c) == -1 else f'Cluster {int(c)}'
+        options.append({'label': label, 'value': int(c)})
+
+    # default to first non-noise cluster if possible, else first
+    default = None
+    non_noise = [int(x) for x in unique if int(x) != -1]
+    if non_noise:
+        default = non_noise[0]
+    else:
+        default = int(unique[0])
+
+    return options, default
+
+@callback(
+    [Output('image-grid', 'children'), Output('image-page', 'data'), Output('page-indicator', 'children')],
+    [Input('prev-btn', 'n_clicks'), Input('next-btn', 'n_clicks'), Input('cluster-select', 'value'), Input('clustering-dropdown', 'value')],
+    [State('image-page', 'data')]
+)
+def update_image_grid_and_page(prev_clicks, next_clicks, cluster_value, clustering_key, current_page):
+    """Manage pagination and update image grid, page store, and page indicator in a single callback.
+    This avoids race conditions between separate callbacks.
+    """
+    # Validate
+    if clustering_key is None or cluster_value is None:
+        return [], 0, 'Page 0 of 0'
+    
+    viz_data = dashboard.load_visualization_data(clustering_key)
+    if viz_data is None:
+        return [], 0, 'Page 0 of 0'
+    
+    clusters = np.array(viz_data.get('clusters', []))
+    image_paths = list(viz_data.get('image_paths', []))
+
+    if clusters.size == 0:
+        return [], 0, 'Page 0 of 0'
+
+    cluster_indices = np.where(clusters == cluster_value)[0]
+    total = len(cluster_indices)
+    per_page = 4
+    max_pages = (total + per_page - 1) // per_page if total > 0 else 0
+
+    # Determine trigger
+    triggered = dash.callback_context.triggered
+    trig_id = triggered[0]['prop_id'].split('.')[0] if triggered else None
+
+    # Determine current page
+    page = int(current_page) if current_page is not None else 0
+    if trig_id in ('cluster-select', 'clustering-dropdown'):
+        page = 0
+    elif trig_id == 'next-btn':
+        if page < max_pages - 1:
+            page += 1
+    elif trig_id == 'prev-btn':
+        if page > 0:
+            page -= 1
+
+    # Clamp
+    if page < 0:
+        page = 0
+    if max_pages > 0 and page > max_pages - 1:
+        page = max_pages - 1
+
+    # Build children for this page
+    start = page * per_page
+    end = start + per_page
+    indices = cluster_indices[start:end]
+
+    children = []
+    for idx in indices:
+        img_path = image_paths[idx] if idx < len(image_paths) else None
+        img_src = dashboard.encode_image(img_path) if img_path else None
+        if img_src:
+            tile = html.Div([
+                html.Div([
+                    html.Img(src=img_src, style={
+                        'position': 'absolute',
+                        'top': '0',
+                        'left': '0',
+                        'width': '100%',
+                        'height': '100%',
+                        'objectFit': 'cover',
+                        'borderRadius': '6px'
+                    })
+                ], style={
+                    'position': 'relative',
+                    'width': '100%',
+                    'paddingTop': '100%',  # 1:1 aspect ratio
+                    'overflow': 'hidden'
+                }),
+                html.Div(os.path.basename(img_path) if img_path else 'No image', style={
+                    'textAlign': 'center',
+                    'fontSize': '12px',
+                    'marginTop': '6px',
+                    'wordBreak': 'break-all'
+                })
+            ], style={'display': 'flex', 'flexDirection': 'column'})
+            children.append(tile)
+        else:
+            placeholder = html.Div([
+                html.Div('🖼️', style={
+                    'position': 'absolute',
+                    'top': '50%',
+                    'left': '50%',
+                    'transform': 'translate(-50%, -50%)',
+                    'fontSize': '24px',
+                    'color': '#7f8c8d'
+                })
+            ], style={
+                'position': 'relative',
+                'width': '100%',
+                'paddingTop': '100%',
+                'overflow': 'hidden',
+                'backgroundColor': '#ecf0f1',
+                'borderRadius': '6px'
+            })
+            wrapped = html.Div([placeholder, html.Div(os.path.basename(img_path) if img_path else 'No image', style={
+                'textAlign': 'center', 'fontSize': '12px', 'marginTop': '6px', 'wordBreak': 'break-all'
+            })], style={'display': 'flex', 'flexDirection': 'column'})
+            children.append(wrapped)
+
+    display = f'Page {page + 1} of {max_pages}' if max_pages > 0 else 'Page 0 of 0'
+    return children, page, display
 
 if __name__ == "__main__":
     if not dashboard.available_results:
