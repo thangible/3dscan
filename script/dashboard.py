@@ -189,6 +189,7 @@ class ClusterVisualizationDashboard:
                             "Z: %{z:.2f}<extra></extra>"
             )])
             
+            # Use autosize and margins instead of hard-coded height so the graph fills its container
             fig.update_layout(
                 title=title,
                 scene=dict(
@@ -196,7 +197,10 @@ class ClusterVisualizationDashboard:
                     yaxis_title="Component 2",
                     zaxis_title="Component 3"
                 ),
-                height=600
+                autosize=True,
+                margin=dict(l=20, r=20, t=60, b=20),
+                template='plotly_white',
+                uirevision='constant'
             )
         else:
             fig = go.Figure(data=[go.Scatter(
@@ -216,11 +220,15 @@ class ClusterVisualizationDashboard:
                             "Y: %{y:.2f}<extra></extra>"
             )])
             
+            # Use autosize and margins instead of hard-coded height so the graph fills its container
             fig.update_layout(
                 title=title,
                 xaxis_title="Component 1",
                 yaxis_title="Component 2",
-                height=500
+                autosize=True,
+                margin=dict(l=20, r=20, t=60, b=20),
+                template='plotly_white',
+                uirevision='constant'
             )
         
         return fig
@@ -231,97 +239,97 @@ dashboard = ClusterVisualizationDashboard()
 # Create Dash app
 app = Dash(__name__)
 
+# Compact header and full-height layout so main area can fill viewport without scrolling
 app.layout = html.Div([
-    html.H1("🎯 Interactive Cluster Visualization Dashboard", 
-            style={'textAlign': 'center', 'marginBottom': '30px'}),
-    
+    # Header row: title and controls
     html.Div([
+        html.H1("🎯 Interactive Cluster Visualization Dashboard",
+                style={'margin': '0', 'fontSize': '20px', 'flex': '0 0 auto'}),
+
         html.Div([
-            html.Label("🔍 Select Clustering Algorithm & Parameters:", 
-                      style={'font-weight': 'bold', 'marginBottom': '10px'}),
-            dcc.Dropdown(
-                id='clustering-dropdown',
-                options=[
-                    {'label': f"{result['display_name']} (Silhouette: {result['metrics']['silhouette']:.3f})" if result['metrics']['silhouette'] else result['display_name'], 
-                     'value': key}
-                    for key, result in dashboard.available_results.items()
-                ],
-                value=list(dashboard.available_results.keys())[0] if dashboard.available_results else None,
-                style={'width': '500px', 'margin': '10px 0'},
-                placeholder="Select a clustering result..."
-            )
-        ], style={'display': 'inline-block', 'margin-right': '30px', 'verticalAlign': 'top'}),
-        
-        html.Div([
-            html.Label("📊 Select Visualization Type:", 
-                      style={'font-weight': 'bold', 'marginBottom': '10px'}),
-            dcc.Dropdown(
-                id='plot-type-dropdown',
-                options=[
-                    {'label': '📈 PCA 2D', 'value': 'pca_2d'},
-                    {'label': '🎲 PCA 3D', 'value': 'pca_3d'},
-                    {'label': '🎯 t-SNE 2D', 'value': 'tsne_2d'},
-                    {'label': '🌐 t-SNE 3D', 'value': 'tsne_3d'}
-                ],
-                value='pca_2d',
-                style={'width': '200px', 'margin': '10px 0'}
-            )
-        ], style={'display': 'inline-block', 'verticalAlign': 'top'})
-    ], style={'margin': '20px', 'padding': '20px', 'backgroundColor': '#f8f9fa', 'borderRadius': '10px'}),
-    
-    # Clustering info panel
-    html.Div(id="clustering-info", style={
-        'margin': '20px', 
-        'padding': '20px', 
-        'border': '2px solid #e3e3e3', 
-        'borderRadius': '10px',
-        'backgroundColor': '#ffffff',
-        'boxShadow': '0 2px 4px rgba(0,0,0,0.1)'
-    }),
-    
-    # Graph (left) + Image panel (right) split 50/50
-    html.Div([
-        # Left: plot - 50%
-        html.Div([
-            html.Button("⤢ Fullscreen", id="fullscreen-btn", n_clicks=0, style={'marginBottom':'10px'}),
-            dcc.Graph(id="main-graph", clear_on_unhover=True, style={'width': '100%', 'height': '500px'}),
-            dcc.Tooltip(id="graph-tooltip")
-        ], id='graph-container', style={'width': '50%', 'margin': '20px'}),
-        
-        # Right: images and controls - 50%
-        html.Div([
-            # store current page for pagination
-            dcc.Store(id='image-page', data=0),
-            
-            html.Label("🖼️ Show images for cluster:", style={'fontWeight': 'bold', 'marginBottom': '10px'}),
-            dcc.Dropdown(id='cluster-select', options=[], value=None, style={'width': '100%', 'marginBottom': '10px'}),
-            
-            # pagination controls
             html.Div([
-                html.Button('◀ Prev', id='prev-btn', n_clicks=0, style={'marginRight': '10px'}),
-                html.Span(id='page-indicator', children='Page 1', style={'marginRight': '10px'}),
-                html.Button('Next ▶', id='next-btn', n_clicks=0)
-            ], style={'marginBottom': '10px'}),
-            
-            # image grid (2x2)
-            html.Div(id='image-grid', children=[], style={
-                'display': 'grid',
-                'gridTemplateColumns': '1fr 1fr',
-                'gap': '10px',
-                'width': '100%'
-            })
-        ], id='image-panel', style={'width': '50%', 'margin': '20px'})
-    ], style={'display': 'flex', 'alignItems': 'flex-start'}),
+                html.Label("🔍 Select Clustering Algorithm & Parameters:", 
+                          style={'font-weight': 'bold', 'marginBottom': '6px'}),
+                dcc.Dropdown(
+                    id='clustering-dropdown',
+                    options=[
+                        {'label': f"{result['display_name']} (Silhouette: {result['metrics']['silhouette']:.3f})" if result['metrics']['silhouette'] else result['display_name'], 
+                         'value': key}
+                        for key, result in dashboard.available_results.items()
+                    ],
+                    value=list(dashboard.available_results.keys())[0] if dashboard.available_results else None,
+                    style={'width': '380px', 'margin': '2px 0'},
+                    placeholder="Select a clustering result..."
+                )
+            ], style={'display': 'inline-block', 'verticalAlign': 'middle', 'marginRight': '12px'}),
+
+            html.Div([
+                dcc.Dropdown(
+                    id='plot-type-dropdown',
+                    options=[
+                        {'label': '📈 PCA 2D', 'value': 'pca_2d'},
+                        {'label': '🎲 PCA 3D', 'value': 'pca_3d'},
+                        {'label': '🎯 t-SNE 2D', 'value': 'tsne_2d'},
+                        {'label': '🌐 t-SNE 3D', 'value': 'tsne_3d'}
+                    ],
+                    value='pca_2d',
+                    style={'width': '140px', 'margin': '2px 0'}
+                )
+            ], style={'display': 'inline-block', 'verticalAlign': 'middle'})
+        ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8px', 'flex': '1 1 auto', 'justifyContent': 'flex-end'})
+
+    ], style={'display': 'flex', 'alignItems': 'center', 'justifyContent': 'space-between', 'padding': '8px 12px', 'backgroundColor': '#f8f9fa', 'borderRadius': '6px', 'gap': '12px', 'height': '50px', 'boxSizing': 'border-box'}),
+
+    # Info panels (compact)
+    html.Div([
+        html.Div(id="clustering-info", style={
+            'flex': '1 1 50%',
+            'margin': '0 12px 0 0',
+            'padding': '10px',
+            'border': '2px solid #e3e3e3',
+            'borderRadius': '10px',
+            'backgroundColor': '#ffffff',
+            'boxShadow': '0 2px 4px rgba(0,0,0,0.05)',
+            'overflow': 'auto',
+            'maxheight': '160px',
+            'boxSizing': 'border-box'
+        }),
+        html.Div(id="method-info", style={
+            'flex': '1 1 50%',
+            'margin': '0 0 0 12px',
+            'padding': '10px',
+            'border': '2px solid #e3e3e3',
+            'borderRadius': '10px',
+            'backgroundColor': '#f8f9fa',
+            'overflow': 'auto',
+            'mazheight': '160px',
+            'boxSizing': 'border-box'
+        })
+    ], style={'display': 'flex', 'alignItems': 'stretch', 'margin': '8px 0'}),
     
-    # Method info panel
-    html.Div(id="method-info", style={
-        'margin': '20px', 
-        'padding': '20px', 
-        'border': '2px solid #e3e3e3', 
-        'borderRadius': '10px',
-        'backgroundColor': '#f8f9fa'
-    })
-], style={'fontFamily': 'Arial, sans-serif'})
+    # Main content: graph (flexible) + image panel (fixed width). This fills remaining viewport height.
+    html.Div([
+        # Graph container: grow to fill remaining space
+        html.Div([
+            html.Button("⤢ Fullscreen", id="fullscreen-btn", n_clicks=0, style={'marginBottom':'8px'}),
+            dcc.Graph(id="main-graph", clear_on_unhover=True, style={'width': '100%', 'height': '100%'}),
+            dcc.Tooltip(id="graph-tooltip")
+        ], id='graph-container', style={'flex': '1 1 0%', 'boxSizing': 'border-box', 'padding': '8px', 'minWidth': '320px', 'height': '100%','overflow': 'hidden'}),
+        
+        # Image panel: fixed width, scrollable internally
+        html.Div([
+            dcc.Store(id='image-page', data=0),
+            html.Label("🖼️ Show images for cluster:", style={'fontWeight': 'bold', 'marginBottom': '8px'}),
+            dcc.Dropdown(id='cluster-select', options=[], value=None, style={'width': '100%', 'marginBottom': '8px'}),
+            html.Div([
+                html.Button('◀ Prev', id='prev-btn', n_clicks=0, style={'marginRight': '8px'}),
+                html.Span(id='page-indicator', children='Page 1', style={'marginRight': '8px'}),
+                html.Button('Next ▶', id='next-btn', n_clicks=0)
+            ], style={'marginBottom': '8px', 'display': 'flex', 'alignItems': 'center'}),
+            html.Div(id='image-grid', children=[], style={'display': 'grid', 'gridTemplateColumns': '1fr 1fr', 'gap': '8px', 'width': '100%', 'justifyItems': 'center', 'alignItems': 'center', 'flex': '1 1 auto', 'overflow': 'hidden', 'gridAutoRows': 'min-content'})
+        ], id='image-panel', style={'flex': '0 0 360px', 'boxSizing': 'border-box', 'padding': '8px', 'minWidth': '280px', 'maxWidth': '420px', 'height': '100%', 'overflow': 'hidden', 'display': 'flex', 'flexDirection': 'column', 'backgroundColor': '#ffffff', 'borderLeft': '1px solid #e6e6e6'}),
+    ], style={'display': 'flex', 'flex': '1 1 0%', 'alignItems': 'stretch', 'overflow': 'hidden', 'gap': '8px'}),
+], style={'display': 'flex', 'flexDirection': 'column', 'height': '100vh', 'overflow': 'hidden', 'fontFamily': 'Arial, sans-serif', 'padding': '6px'})
 
 @callback(
     [Output("main-graph", "figure"),
@@ -388,23 +396,26 @@ def update_graph_and_info(clustering_key, plot_type):
         html.H3(f"📊 {result_info['algorithm']} Results", 
                 style={'color': '#2c3e50', 'marginBottom': '15px'}),
         
+        # Render parameters and metrics side-by-side for a compact display
         html.Div([
             html.Div([
-                html.H5("Parameters:", style={'color': '#34495e', 'marginBottom': '5px'}),
-                html.P(str(result_info['params']), style={'fontSize': '14px', 'margin': '0'})
-            ], style={'marginBottom': '15px'}),
-            
-            html.Div([
-                html.H5("Clustering Metrics:", style={'color': '#34495e', 'marginBottom': '10px'}),
                 html.Div([
-                    html.Span(f"🎯 Clusters: {metrics.get('n_clusters', 'N/A')}", 
-                             style={'marginRight': '20px', 'fontSize': '14px'}),
-                    html.Span(f"📈 Silhouette: {metrics.get('silhouette', 'N/A'):.3f}" if metrics.get('silhouette') else "📈 Silhouette: N/A", 
-                             style={'marginRight': '20px', 'fontSize': '14px'}),
-                    html.Span(f"🔇 Noise: {metrics.get('n_noise', 0)}" if result_info['algorithm'] == 'DBSCAN' else "", 
-                             style={'fontSize': '14px'})
-                ])
-            ])
+                    html.H5("Parameters:", style={'color': '#34495e', 'marginBottom': '5px'}),
+                    html.P(str(result_info['params']), style={'fontSize': '14px', 'margin': '0', 'wordBreak': 'break-all'})
+                ], style={'minWidth': '220px', 'marginRight': '20px'}) ,
+
+                html.Div([
+                    html.H5("Clustering Metrics:", style={'color': '#34495e', 'marginBottom': '5px'}),
+                    html.Div([
+                        html.Span(f"🎯 Clusters: {metrics.get('n_clusters', 'N/A')}", 
+                                 style={'fontSize': '14px'}),
+                        html.Span(f"📈 Silhouette: {metrics.get('silhouette', 'N/A'):.3f}" if metrics.get('silhouette') else "📈 Silhouette: N/A", 
+                                 style={'fontSize': '14px'}),
+                        html.Span(f"🔇 Noise: {metrics.get('n_noise', 0)}" if result_info['algorithm'] == 'DBSCAN' else "", 
+                                 style={'fontSize': '14px'})
+                    ], style={'display': 'flex', 'flexDirection': 'row', 'alignItems': 'center', 'gap': '12px', 'flexWrap': 'wrap'})
+                ], style={'flex': '1', 'minWidth': '200px'})
+            ], style={'display': 'flex', 'flexDirection': 'row', 'alignItems': 'flex-start', 'justifyContent': 'space-between', 'width': '100%'}),
         ])
     ]
     
@@ -511,9 +522,10 @@ def toggle_fullscreen(n_clicks):
     Uses the parity of n_clicks to switch state.
     """
     # Default (normal) styles - keep a consistent half-screen split using flex basis so layout doesn't collapse
-    normal_container_style = {'flex': '0 0 50%', 'boxSizing': 'border-box', 'margin': '20px', 'minWidth': '320px'}
+    # Normal (non-fullscreen) should fill the available container height
+    normal_container_style = {'flex': '1 1 0%', 'boxSizing': 'border-box', 'margin': '0', 'minWidth': '320px', 'height': '100%'}
     normal_button_text = '⤢ Fullscreen'
-    normal_graph_style = {'width': '100%', 'height': '500px'}
+    normal_graph_style = {'width': '100%', 'height': '90%'}
 
     # Fullscreen styles
     # Keep the graph fixed to the left half of the screen when toggled to fullscreen.
@@ -534,7 +546,7 @@ def toggle_fullscreen(n_clicks):
     
     # Image panel styles to accompany fullscreen/normal modes. When graph is fixed to left half,
     # keep the image panel fixed to the right half so it remains visible and clipped.
-    normal_image_panel_style = {'flex': '0 0 50%', 'boxSizing': 'border-box', 'margin': '20px', 'overflow': 'auto', 'minWidth': '320px'}
+    normal_image_panel_style = {'flex': '0 0 30%', 'boxSizing': 'border-box', 'margin': '0', 'overflow': 'hidden', 'minWidth': '320px', 'height': '100%'}
     fullscreen_image_panel_style = {
         'position': 'fixed',
         'top': '0',
@@ -659,30 +671,22 @@ def update_image_grid_and_page(prev_clicks, next_clicks, cluster_value, clusteri
         img_path = image_paths[idx] if idx < len(image_paths) else None
         img_src = dashboard.encode_image(img_path) if img_path else None
         if img_src:
+            # compact centered 1:1 thumbnail
             tile = html.Div([
-                html.Div([
-                    html.Img(src=img_src, style={
-                        'position': 'absolute',
-                        'top': '0',
-                        'left': '0',
-                        'width': '100%',
-                        'height': '100%',
-                        'objectFit': 'cover',
-                        'borderRadius': '6px'
-                    })
-                ], style={
-                    'position': 'relative',
-                    'width': '100%',
-                    'paddingTop': '100%',  # 1:1 aspect ratio
-                    'overflow': 'hidden'
+                html.Img(src=img_src, style={
+                    'width': '400px',
+                    'height': '400px',
+                    'objectFit': 'cover',
+                    'borderRadius': '6px'
                 }),
                 html.Div(os.path.basename(img_path) if img_path else 'No image', style={
                     'textAlign': 'center',
                     'fontSize': '12px',
                     'marginTop': '6px',
-                    'wordBreak': 'break-all'
+                    'wordBreak': 'break-all',
+                    'maxWidth': '140px'
                 })
-            ], style={'display': 'flex', 'flexDirection': 'column'})
+            ], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'justifyContent': 'center', 'height': '100%','gap':'6px'})
             children.append(tile)
         else:
             placeholder = html.Div([
@@ -700,11 +704,16 @@ def update_image_grid_and_page(prev_clicks, next_clicks, cluster_value, clusteri
                 'paddingTop': '100%',
                 'overflow': 'hidden',
                 'backgroundColor': '#ecf0f1',
-                'borderRadius': '6px'
+                'borderRadius': '6px',
+                'display': 'flex',
+                'alignItems': 'center',
+                'justifyContent': 'center',
+                'color': '#7f8c8d',
+                'fontSize': '24px'
             })
             wrapped = html.Div([placeholder, html.Div(os.path.basename(img_path) if img_path else 'No image', style={
-                'textAlign': 'center', 'fontSize': '12px', 'marginTop': '6px', 'wordBreak': 'break-all'
-            })], style={'display': 'flex', 'flexDirection': 'column'})
+                'textAlign': 'center', 'fontSize': '12px', 'marginTop': '6px', 'wordBreak': 'break-all', 'maxWidth': '140px'
+            })], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'height': '100%','gap':'6px'})
             children.append(wrapped)
 
     display = f'Page {page + 1} of {max_pages}' if max_pages > 0 else 'Page 0 of 0'
