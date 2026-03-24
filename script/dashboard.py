@@ -278,9 +278,14 @@ app.layout = html.Div([
         'boxShadow': '0 2px 4px rgba(0,0,0,0.1)'
     }),
     
-    # Main graph
-    dcc.Graph(id="main-graph", clear_on_unhover=True, style={'margin': '20px'}),
-    dcc.Tooltip(id="graph-tooltip"),
+    # Main graph with fullscreen support
+    html.Div([
+        html.Div([
+            html.Button("⤢ Fullscreen", id="fullscreen-btn", n_clicks=0, style={'marginBottom':'10px'}),
+            dcc.Graph(id="main-graph", clear_on_unhover=True, style={'width': '100%', 'height': '500px'}),
+            dcc.Tooltip(id="graph-tooltip")
+        ], id='graph-container', style={'margin': '20px'})
+    ]),
     
     # Method info panel
     html.Div(id="method-info", style={
@@ -464,6 +469,39 @@ def update_method_info(plot_type):
             html.P("🔇 Noise points (if any) may be excluded for better clarity", 
                   style={'fontStyle': 'italic', 'color': '#7f8c8d'})
         ])
+
+@callback(
+    [Output("graph-container", "style"), Output("fullscreen-btn", "children"), Output("main-graph", "style")],
+    [Input("fullscreen-btn", "n_clicks")]
+)
+def toggle_fullscreen(n_clicks):
+    """Toggle the main graph between normal and fullscreen modes using the button.
+    Uses the parity of n_clicks to switch state.
+    """
+    # Default (normal) style
+    normal_container_style = {'margin': '20px'}
+    normal_button_text = '⤢ Fullscreen'
+    normal_graph_style = {'width': '100%', 'height': '500px'}
+
+    # Fullscreen styles
+    fullscreen_container_style = {
+        'position': 'fixed',
+        'top': '0',
+        'left': '0',
+        'width': '100%',
+        'height': '100%',
+        'zIndex': '9999',
+        'backgroundColor': '#ffffff',
+        'padding': '20px',
+        'overflow': 'auto'
+    }
+    fullscreen_button_text = '⤡ Exit Fullscreen'
+    fullscreen_graph_style = {'width': '100%', 'height': 'calc(100vh - 80px)'}
+
+    if not n_clicks or (n_clicks % 2 == 0):
+        return normal_container_style, normal_button_text, normal_graph_style
+    else:
+        return fullscreen_container_style, fullscreen_button_text, fullscreen_graph_style
 
 if __name__ == "__main__":
     if not dashboard.available_results:
