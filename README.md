@@ -55,3 +55,6 @@ python script\dashboard.py
 - config/: argument parsing (args.py)
 
 For details and full argument lists, run any script with `--help` (e.g. `python script\train_embedder_simclr.py --help`).
+
+
+Werkstudent im Max Team, ich unterstürz Max bei entwicklung der 
