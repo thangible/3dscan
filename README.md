@@ -25,6 +25,44 @@ Toolkit to train image embedders (VQVAE or SimCLR), extract embeddings, run clus
    python script\dashboard.py
    Open http://127.0.0.1:8050
 
+## Config file and command-line args
+
+This project supports a YAML config file (default: `config/config.yaml`) and command-line args. Command-line arguments override values in the config file. Pass a custom config with `--config path/to/config.yaml`.
+
+Example `config/config.yaml` (project default):
+
+```yaml
+# config/config.yaml
+data_dir: ../data/raw_images
+input_dim: 512
+hidden_dim: 512
+latent_dim: 512
+batch_size: 512
+max_epoch_num: 100
+lr: 1e-3
+weight_decay: 1e-4
+exp: exp
+```
+
+Key command-line arguments (see `config/args.py` for full list and defaults):
+
+- `--config` : Path to config file (default: `config/config.yaml`).
+- `--data_dir` : Directory containing the dataset (overrides `data_dir` from config).
+- `--batch_size` : Batch size for training.
+- `--max_epoch_num` : Maximum number of epochs.
+- `--input_dim` : Input image size (H=W).
+- `--hidden_dim` : Hidden dimension for the model (VAE encoder/decoder channels).
+- `--latent_dim` : Latent / embedding dimension.
+- `--lr` : Learning rate.
+- `--weight_decay` : Weight decay for optimizer.
+- `--exp` : Experiment directory to save outputs (overrides config `exp`).
+
+Example: run training using the default config but override batch size and experiment name:
+
+```
+python script\train_embedder_simclr.py --config config/config.yaml --batch_size 64 --exp my_experiment
+```
+
 ## Notes
 
 - Use `--exp` to target the experiment folder (artifacts written under `exp/<EXP>/`).
@@ -52,9 +90,8 @@ python script\dashboard.py
 - model/: VQVAE definitions
 - dataset/: ImageDataset and augmentations
 - exp/: outputs (checkpoints, embeddings, clustering_results, visualization)
-- config/: argument parsing (args.py)
+- config/: argument parsing and configuration (args.py)
 
 For details and full argument lists, run any script with `--help` (e.g. `python script\train_embedder_simclr.py --help`).
 
-
-Werkstudent im Max Team, ich unterstürz Max bei entwicklung der 
+Werkstudent im Max Team, ich unterstürz Max bei entwicklung der
