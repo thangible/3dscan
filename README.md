@@ -1,4 +1,4 @@
-# 3D Scanner — VQVAE / SimCLR Embedding & Clustering
+# VQVAE / SimCLR Embedding & Clustering -
 
 Toolkit to train image embedders (VQVAE or SimCLR), extract embeddings, run clustering, and visualize results with an interactive dashboard.
 
