@@ -149,3 +149,9 @@ wandb/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+./data.ipynb
+./data_2.ipynb
+./data_3.ipynb
+training_log.txt
+com
